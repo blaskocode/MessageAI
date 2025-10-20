@@ -109,6 +109,34 @@ class FirebaseService: ObservableObject {
         try await db.collection("users").document(userId).updateData(updates)
     }
     
+    func searchUsers(query: String) async throws -> [[String: Any]] {
+        let lowercaseQuery = query.lowercased()
+        
+        // Fetch all users (in production, you'd want pagination)
+        let snapshot = try await db.collection("users").getDocuments()
+        
+        // Filter users client-side (Firestore doesn't support case-insensitive search)
+        let matchingUsers = snapshot.documents.compactMap { doc -> [String: Any]? in
+            let data = doc.data()
+            guard let displayName = data["displayName"] as? String,
+                  let email = data["email"] as? String else {
+                return nil
+            }
+            
+            // Match by display name or email
+            if displayName.lowercased().contains(lowercaseQuery) ||
+               email.lowercased().contains(lowercaseQuery) {
+                var userData = data
+                userData["userId"] = doc.documentID
+                return userData
+            }
+            
+            return nil
+        }
+        
+        return matchingUsers
+    }
+    
     // MARK: - Conversations
     
     func createConversation(participantIds: [String], type: String) async throws -> String {

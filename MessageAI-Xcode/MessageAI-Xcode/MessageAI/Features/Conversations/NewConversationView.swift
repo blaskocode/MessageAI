@@ -9,26 +9,136 @@ import SwiftUI
 
 struct NewConversationView: View {
     @Environment(\.dismiss) var dismiss
-    @State private var searchText = ""
+    @StateObject private var viewModel = NewConversationViewModel()
+    @State private var selectedConversationId: ConversationID?
+    
+    // Wrapper to make conversation ID identifiable
+    struct ConversationID: Identifiable, Hashable {
+        let id: String
+    }
     
     var body: some View {
         NavigationStack {
-            List {
-                // TODO: Show list of users to start conversation with
-                Text("User list coming soon...")
-                    .foregroundColor(.gray)
-            }
-            .searchable(text: $searchText, prompt: "Search users")
-            .navigationTitle("New Message")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        dismiss()
+            contentView
+                .navigationTitle("New Message")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button("Cancel") {
+                            dismiss()
+                        }
                     }
+                }
+                .alert("Error", isPresented: showErrorAlert) {
+                    Button("OK") {
+                        viewModel.errorMessage = nil
+                    }
+                } message: {
+                    if let error = viewModel.errorMessage {
+                        Text(error)
+                    }
+                }
+                .navigationDestination(item: $selectedConversationId) { conversation in
+                    ChatView(conversationId: conversation.id)
+                }
+        }
+    }
+    
+    private var contentView: some View {
+        List {
+            if viewModel.isLoading {
+                HStack {
+                    Spacer()
+                    ProgressView()
+                    Spacer()
+                }
+            } else if viewModel.searchText.isEmpty {
+                Text("Search for users by name or email")
+                    .foregroundColor(.gray)
+                    .font(.subheadline)
+            } else if viewModel.searchResults.isEmpty {
+                Text("No users found")
+                    .foregroundColor(.gray)
+                    .font(.subheadline)
+            } else {
+                userList
+            }
+        }
+        .searchable(text: $viewModel.searchText, prompt: "Search users")
+        .onChange(of: viewModel.searchText) {
+            Task {
+                // Debounce search
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                await viewModel.searchUsers()
+            }
+        }
+    }
+    
+    private var userList: some View {
+        ForEach(Array(viewModel.searchResults.enumerated()), id: \.offset) { index, userData in
+            UserRow(userData: userData) {
+                Task {
+                    await createAndNavigate(withUserId: userData["userId"] as? String ?? "")
                 }
             }
         }
+    }
+    
+    private var showErrorAlert: Binding<Bool> {
+        Binding(
+            get: { viewModel.errorMessage != nil },
+            set: { if !$0 { viewModel.errorMessage = nil } }
+        )
+    }
+    
+    private func createAndNavigate(withUserId userId: String) async {
+        if let conversationId = await viewModel.createConversation(withUserId: userId) {
+            selectedConversationId = ConversationID(id: conversationId)
+        }
+    }
+}
+
+// MARK: - User Row
+
+struct UserRow: View {
+    let userData: [String: Any]
+    let onTap: () -> Void
+    
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 12) {
+                // Profile circle
+                Circle()
+                    .fill(Color(hex: userData["profileColor"] as? String ?? "#4ECDC4"))
+                    .frame(width: 44, height: 44)
+                    .overlay(
+                        Text(displayName.prefix(1).uppercased())
+                            .font(.headline)
+                            .foregroundColor(.white)
+                    )
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(displayName)
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    
+                    Text(email)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+            }
+            .padding(.vertical, 4)
+        }
+    }
+    
+    private var displayName: String {
+        userData["displayName"] as? String ?? "Unknown"
+    }
+    
+    private var email: String {
+        userData["email"] as? String ?? ""
     }
 }
 

@@ -29,12 +29,16 @@ struct ChatView: View {
                         }
                     }
                     .padding()
+                    .frame(maxHeight: .infinity)
                 }
                 .onChange(of: viewModel.messages.count) {
                     // Auto-scroll to bottom when new message arrives
+                    guard !viewModel.messages.isEmpty else { return }
                     if let lastMessage = viewModel.messages.last {
-                        withAnimation {
-                            proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            withAnimation {
+                                proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                            }
                         }
                     }
                 }
