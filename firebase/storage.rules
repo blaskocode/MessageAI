@@ -1,0 +1,44 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function to check file size (10MB max)
+    function isValidSize() {
+      return request.resource.size < 10 * 1024 * 1024;
+    }
+    
+    // Helper function to check image type
+    function isImage() {
+      return request.resource.contentType.matches('image/.*');
+    }
+    
+    // Profile pictures
+    match /profile_pictures/{userId}/{fileName} {
+      // Only authenticated users can read profile pictures
+      allow read: if isAuthenticated();
+      
+      // Only the user can upload their own profile picture
+      allow write: if isAuthenticated() && 
+                      request.auth.uid == userId &&
+                      isImage() &&
+                      isValidSize();
+    }
+    
+    // Message media (images/GIFs)
+    match /message_media/{conversationId}/{fileName} {
+      // Only authenticated users can read media
+      allow read: if isAuthenticated();
+      
+      // Only authenticated users can upload media with size/type restrictions
+      allow write: if isAuthenticated() &&
+                      isImage() &&
+                      isValidSize();
+    }
+  }
+}
+
