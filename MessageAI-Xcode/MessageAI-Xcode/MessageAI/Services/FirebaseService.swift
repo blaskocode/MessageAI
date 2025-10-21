@@ -139,16 +139,22 @@ class FirebaseService: ObservableObject {
     
     // MARK: - Conversations
     
-    func createConversation(participantIds: [String], type: String) async throws -> String {
+    func createConversation(participantIds: [String], type: String, groupName: String? = nil) async throws -> String {
         let conversationRef = db.collection("conversations").document()
         
-        let conversationData: [String: Any] = [
+        var conversationData: [String: Any] = [
             "conversationId": conversationRef.documentID,
             "type": type,
             "participantIds": participantIds,
             "createdAt": FieldValue.serverTimestamp(),
             "lastUpdated": FieldValue.serverTimestamp()
         ]
+        
+        // Add group name if provided
+        if let groupName = groupName {
+            conversationData["groupName"] = groupName
+            conversationData["createdBy"] = currentUserId ?? ""
+        }
         
         try await conversationRef.setData(conversationData)
         return conversationRef.documentID

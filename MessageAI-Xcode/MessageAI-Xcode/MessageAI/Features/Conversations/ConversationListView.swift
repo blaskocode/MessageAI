@@ -29,13 +29,28 @@ struct ConversationListView: View {
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { viewModel.showNewConversation = true }) {
+                    Menu {
+                        Button {
+                            viewModel.showNewConversation = true
+                        } label: {
+                            Label("New Message", systemImage: "message")
+                        }
+                        
+                        Button {
+                            viewModel.showNewGroup = true
+                        } label: {
+                            Label("New Group", systemImage: "person.3")
+                        }
+                    } label: {
                         Image(systemName: "square.and.pencil")
                     }
                 }
             }
             .sheet(isPresented: $viewModel.showNewConversation) {
                 NewConversationView()
+            }
+            .sheet(isPresented: $viewModel.showNewGroup) {
+                NewGroupView()
             }
             .onAppear {
                 viewModel.loadConversations()

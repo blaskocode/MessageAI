@@ -13,6 +13,7 @@ class ConversationListViewModel: ObservableObject {
     
     @Published var conversations: [Conversation] = []
     @Published var showNewConversation = false
+    @Published var showNewGroup = false
     @Published var isLoading = false
     
     private let firebaseService = FirebaseService.shared
