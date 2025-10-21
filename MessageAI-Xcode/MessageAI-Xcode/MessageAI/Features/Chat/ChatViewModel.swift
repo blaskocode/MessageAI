@@ -40,6 +40,13 @@ class ChatViewModel: ObservableObject {
             self?.parseMessages(documents)
         }
         
+        // Listen for typing status
+        typingListener = firebaseService.observeTypingStatus(conversationId: conversationId, currentUserId: userId) { [weak self] isTyping in
+            Task { @MainActor in
+                self?.isTyping = isTyping
+            }
+        }
+        
         // Mark messages as read
         Task {
             try? await markMessagesAsRead(userId: userId)
@@ -133,11 +140,15 @@ class ChatViewModel: ObservableObject {
         guard let userId = currentUserId else { return }
         
         Task {
-            try? await firebaseService.updateTypingStatus(
-                conversationId: conversationId,
-                userId: userId,
-                isTyping: isTyping
-            )
+            do {
+                try await firebaseService.updateTypingStatus(
+                    conversationId: conversationId,
+                    userId: userId,
+                    isTyping: isTyping
+                )
+            } catch {
+                print("❌ [ChatViewModel] Failed to update typing status: \(error)")
+            }
         }
     }
     

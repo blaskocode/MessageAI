@@ -253,6 +253,37 @@ class FirebaseService: ObservableObject {
             ])
     }
     
+    func observeTypingStatus(conversationId: String, currentUserId: String, completion: @escaping (Bool) -> Void) -> ListenerRegistration {
+        let listener = db.collection("conversations")
+            .document(conversationId)
+            .collection("typing")
+            .addSnapshotListener { snapshot, error in
+                if let error = error {
+                    print("❌ [FirebaseService] Error observing typing status: \(error.localizedDescription)")
+                    return
+                }
+                
+                guard let documents = snapshot?.documents else {
+                    completion(false)
+                    return
+                }
+                
+                // Check if any other user (not current user) is typing
+                let isAnyoneTyping = documents.contains { doc in
+                    guard doc.documentID != currentUserId,
+                          let isTyping = doc.data()["isTyping"] as? Bool else {
+                        return false
+                    }
+                    return isTyping
+                }
+                
+                completion(isAnyoneTyping)
+            }
+        
+        listenerRegistrations.append(listener)
+        return listener
+    }
+    
     // MARK: - Helper Methods
     
     private func extractInitials(from name: String) -> String {

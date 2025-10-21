@@ -29,7 +29,6 @@ struct ChatView: View {
                         }
                     }
                     .padding()
-                    .frame(maxHeight: .infinity)
                 }
                 .onChange(of: viewModel.messages.count) {
                     // Auto-scroll to bottom when new message arrives
@@ -43,12 +42,15 @@ struct ChatView: View {
                     }
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             
             // Input Bar
-            HStack(spacing: 12) {
+            HStack(alignment: .bottom, spacing: 12) {
                 TextField("Message", text: $messageText, axis: .vertical)
                     .textFieldStyle(.roundedBorder)
-                    .lineLimit(1...5)
+                    .lineLimit(1...4)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(minHeight: 36, maxHeight: 100)
                     .onChange(of: messageText) {
                         viewModel.updateTypingStatus(isTyping: !messageText.isEmpty)
                     }

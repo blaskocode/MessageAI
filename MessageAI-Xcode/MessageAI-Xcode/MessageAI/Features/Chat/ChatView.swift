@@ -29,7 +29,6 @@ struct ChatView: View {
                         }
                     }
                     .padding()
-                    .frame(maxHeight: .infinity)
                 }
                 .onChange(of: viewModel.messages.count) {
                     // Auto-scroll to bottom when new message arrives
@@ -42,13 +41,40 @@ struct ChatView: View {
                         }
                     }
                 }
+                .onChange(of: viewModel.isTyping) {
+                    // Auto-scroll when typing indicator appears
+                    if viewModel.isTyping, let lastMessage = viewModel.messages.last {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            withAnimation {
+                                proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                            }
+                        }
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            
+            // Typing Indicator (above input bar)
+            if viewModel.isTyping {
+                HStack {
+                    Text("Typing...")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                        .italic()
+                        .padding(.horizontal)
+                    Spacer()
+                }
+                .frame(height: 20)
+                .background(Color(.systemBackground))
             }
             
             // Input Bar
-            HStack(spacing: 12) {
+            HStack(alignment: .bottom, spacing: 12) {
                 TextField("Message", text: $messageText, axis: .vertical)
                     .textFieldStyle(.roundedBorder)
-                    .lineLimit(1...5)
+                    .lineLimit(1...4)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(minHeight: 36, maxHeight: 100)
                     .onChange(of: messageText) {
                         viewModel.updateTypingStatus(isTyping: !messageText.isEmpty)
                     }
