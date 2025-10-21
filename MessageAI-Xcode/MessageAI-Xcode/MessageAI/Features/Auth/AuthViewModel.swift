@@ -88,12 +88,15 @@ class AuthViewModel: ObservableObject {
 
     // MARK: - Sign Out
 
-    func signOut() {
+    func signOut() async {
         do {
             // Update online status before signing out
             if let userId = firebaseService.currentUserId {
-                Task {
-                    try? await firebaseService.updateOnlineStatus(userId: userId, isOnline: false)
+                do {
+                    try await firebaseService.updateOnlineStatus(userId: userId, isOnline: false)
+                    print("✅ User status set to offline before sign out")
+                } catch {
+                    print("⚠️ Failed to update online status: \(error)")
                 }
             }
 

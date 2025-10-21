@@ -9,31 +9,61 @@ import SwiftUI
 import FirebaseCore
 import FirebaseFirestore
 
+// MARK: - Firebase Configuration (must run BEFORE App initialization)
+private class FirebaseConfigurator {
+    static let shared = FirebaseConfigurator()
+    
+    private init() {
+        FirebaseApp.configure()
+        
+        // CRITICAL: Enable offline persistence
+        let settings = FirestoreSettings()
+        settings.cacheSettings = PersistentCacheSettings()
+        Firestore.firestore().settings = settings
+        
+        print("✅ Firebase configured with offline persistence enabled")
+    }
+}
+
 @main
 struct MessageAIApp: App {
 
-    init() {
-        configureFirebase()
-    }
+    @Environment(\.scenePhase) private var scenePhase
+    
+    // Force Firebase configuration before accessing FirebaseService
+    private let firebaseConfigurator = FirebaseConfigurator.shared
+    private let firebaseService = FirebaseService.shared
 
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .environmentObject(FirebaseService.shared)
+                .environmentObject(firebaseService)
+        }
+        .onChange(of: scenePhase) { oldPhase, newPhase in
+            handleScenePhaseChange(oldPhase: oldPhase, newPhase: newPhase)
         }
     }
 
-    // MARK: - Firebase Configuration
+    // MARK: - Scene Phase Handling
 
-    private func configureFirebase() {
-        FirebaseApp.configure()
+    private func handleScenePhaseChange(oldPhase: ScenePhase, newPhase: ScenePhase) {
+        guard let userId = firebaseService.currentUserId else { return }
 
-        // CRITICAL: Enable offline persistence
-        // This must be done immediately after Firebase initialization
-        let settings = FirestoreSettings()
-        settings.cacheSettings = PersistentCacheSettings()
-        Firestore.firestore().settings = settings
+        Task {
+            switch newPhase {
+            case .active:
+                // App came to foreground - user is online
+                try? await firebaseService.updateOnlineStatus(userId: userId, isOnline: true)
+                print("✅ User status: online")
 
-        print("✅ Firebase configured with offline persistence enabled")
+            case .background, .inactive:
+                // App went to background or became inactive - user is offline
+                try? await firebaseService.updateOnlineStatus(userId: userId, isOnline: false)
+                print("✅ User status: offline")
+
+            @unknown default:
+                break
+            }
+        }
     }
 }

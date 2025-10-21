@@ -21,7 +21,7 @@ struct ProfileView: View {
 
                         // Profile Picture Placeholder
                         Circle()
-                            .fill(Color.blue)
+                            .fill(Color.messagePrimary)
                             .frame(width: 100, height: 100)
                             .overlay {
                                 Text("AB")
@@ -62,7 +62,9 @@ struct ProfileView: View {
             .navigationTitle("Profile")
             .confirmationDialog("Are you sure you want to sign out?", isPresented: $showLogoutConfirmation, titleVisibility: .visible) {
                 Button("Sign Out", role: .destructive) {
-                    authViewModel.signOut()
+                    Task {
+                        await authViewModel.signOut()
+                    }
                 }
                 Button("Cancel", role: .cancel) {}
             }

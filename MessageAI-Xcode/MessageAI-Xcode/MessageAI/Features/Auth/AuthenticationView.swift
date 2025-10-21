@@ -74,7 +74,7 @@ struct AuthenticationView: View {
                             .frame(height: 50)
                     }
                 }
-                .background(Color.blue)
+                .background(Color.messagePrimary)
                 .foregroundColor(.white)
                 .cornerRadius(10)
                 .padding(.horizontal, 40)
@@ -84,7 +84,7 @@ struct AuthenticationView: View {
                 Button(action: { isSignUpMode.toggle() }) {
                     Text(isSignUpMode ? "Already have an account? Sign In" : "Don't have an account? Sign Up")
                         .font(.subheadline)
-                        .foregroundColor(.blue)
+                        .foregroundColor(.messagePrimary)
                 }
 
                 Spacer()

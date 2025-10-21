@@ -40,7 +40,9 @@ struct ConversationListView: View {
             }
             .confirmationDialog("Are you sure you want to sign out?", isPresented: $showLogoutConfirmation, titleVisibility: .visible) {
                 Button("Sign Out", role: .destructive) {
-                    authViewModel.signOut()
+                    Task {
+                        await authViewModel.signOut()
+                    }
                 }
                 Button("Cancel", role: .cancel) {}
             }

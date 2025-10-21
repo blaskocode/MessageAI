@@ -443,6 +443,31 @@ class FirebaseService: ObservableObject {
         return listener
     }
 
+    func observeUserPresence(userIds: [String], completion: @escaping ([String: Bool]) -> Void) -> [ListenerRegistration] {
+        var listeners: [ListenerRegistration] = []
+
+        for userId in userIds {
+            let listener = db.collection("users")
+                .document(userId)
+                .addSnapshotListener { snapshot, error in
+                    if let error = error {
+                        print("❌ [FirebaseService] Error observing presence for user \(userId): \(error.localizedDescription)")
+                        return
+                    }
+
+                    guard let data = snapshot?.data() else { return }
+
+                    let isOnline = data["isOnline"] as? Bool ?? false
+                    completion([userId: isOnline])
+                }
+
+            listeners.append(listener)
+            listenerRegistrations.append(listener)
+        }
+
+        return listeners
+    }
+
     // MARK: - Helper Methods
 
     private func extractInitials(from name: String) -> String {

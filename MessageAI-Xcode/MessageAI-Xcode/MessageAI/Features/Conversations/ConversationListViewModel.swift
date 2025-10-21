@@ -19,10 +19,14 @@ class ConversationListViewModel: ObservableObject {
     private let firebaseService = FirebaseService.shared
     private let notificationService = NotificationService.shared
     private var listener: ListenerRegistration?
+    private var presenceListeners: [ListenerRegistration] = []
 
     // Track previously seen last messages to detect new ones
     private var previousLastMessages: [String: String] = [:]  // conversationId -> lastMessageId
     private var isInitialLoad = true
+
+    // Track real-time online status for all participants
+    @Published var userPresence: [String: Bool] = [:]  // userId -> isOnline
 
     func loadConversations() {
         guard let userId = firebaseService.currentUserId else {
@@ -150,7 +154,79 @@ class ConversationListViewModel: ObservableObject {
             isInitialLoad = false
         }
 
+        // Set up presence listeners for all participants
+        setupPresenceListeners()
+
         print("✅ Loaded \(conversations.count) conversations")
+    }
+
+    private func setupPresenceListeners() {
+        // Remove existing listeners
+        presenceListeners.forEach { $0.remove() }
+        presenceListeners.removeAll()
+
+        // Collect all unique participant IDs across all conversations
+        var allParticipantIds = Set<String>()
+        for conversation in conversations {
+            allParticipantIds.formUnion(conversation.participantIds)
+        }
+
+        // Remove current user from the list
+        if let currentUserId = firebaseService.currentUserId {
+            allParticipantIds.remove(currentUserId)
+        }
+
+        // Set up presence listener for each user
+        let listeners = firebaseService.observeUserPresence(
+            userIds: Array(allParticipantIds)
+        ) { [weak self] presenceUpdate in
+            guard let self = self else { return }
+
+            // Update the presence dictionary
+            for (userId, isOnline) in presenceUpdate {
+                self.userPresence[userId] = isOnline
+            }
+
+            // Update conversations with new presence data
+            self.updateConversationsWithPresence()
+        }
+
+        presenceListeners = listeners
+        print("✅ Set up \(presenceListeners.count) presence listeners")
+    }
+
+    private func updateConversationsWithPresence() {
+        // Update participant details with real-time presence
+        conversations = conversations.map { conversation in
+            var updatedDetails = conversation.participantDetails
+
+            // Update isOnline for each participant with real-time data
+            for (userId, participantInfo) in updatedDetails {
+                if let isOnline = userPresence[userId] {
+                    updatedDetails[userId] = ParticipantInfo(
+                        name: participantInfo.name,
+                        photoURL: participantInfo.photoURL,
+                        isOnline: isOnline
+                    )
+                }
+            }
+
+            // Create new conversation with updated participant details
+            return Conversation(
+                id: conversation.id,
+                type: conversation.type,
+                participantIds: conversation.participantIds,
+                participantDetails: updatedDetails,
+                lastMessageText: conversation.lastMessageText,
+                lastMessageSenderId: conversation.lastMessageSenderId,
+                lastMessageTimestamp: conversation.lastMessageTimestamp,
+                lastUpdated: conversation.lastUpdated,
+                createdAt: conversation.createdAt,
+                hasUnreadMessages: conversation.hasUnreadMessages,
+                groupName: conversation.groupName,
+                createdBy: conversation.createdBy
+            )
+        }
     }
 
     private func triggerNotification(
@@ -211,5 +287,6 @@ class ConversationListViewModel: ObservableObject {
 
     deinit {
         listener?.remove()
+        presenceListeners.forEach { $0.remove() }
     }
 }

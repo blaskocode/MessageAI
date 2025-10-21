@@ -22,6 +22,15 @@ struct ContentView: View {
             }
         }
         .environmentObject(authViewModel)
+        .onAppear {
+            // Set user online if already authenticated on app launch
+            if let userId = firebaseService.currentUserId {
+                Task {
+                    try? await firebaseService.updateOnlineStatus(userId: userId, isOnline: true)
+                    print("✅ User set to online on app launch")
+                }
+            }
+        }
     }
 }
 
