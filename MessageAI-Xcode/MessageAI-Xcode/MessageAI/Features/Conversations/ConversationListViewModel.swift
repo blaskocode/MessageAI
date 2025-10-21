@@ -17,7 +17,12 @@ class ConversationListViewModel: ObservableObject {
     @Published var isLoading = false
     
     private let firebaseService = FirebaseService.shared
+    private let notificationService = NotificationService.shared
     private var listener: ListenerRegistration?
+    
+    // Track previously seen last messages to detect new ones
+    private var previousLastMessages: [String: String] = [:]  // conversationId -> lastMessageId
+    private var isInitialLoad = true
     
     func loadConversations() {
         guard let userId = firebaseService.currentUserId else {
@@ -34,6 +39,8 @@ class ConversationListViewModel: ObservableObject {
     }
     
     private func parseConversations(_ documents: [DocumentSnapshot]) {
+        guard let currentUserId = firebaseService.currentUserId else { return }
+        
         conversations = documents.compactMap { doc -> Conversation? in
             let data = doc.data()
             
@@ -47,6 +54,27 @@ class ConversationListViewModel: ObservableObject {
             let lastMessageData = data?["lastMessage"] as? [String: Any]
             let lastMessageText = lastMessageData?["text"] as? String
             let lastMessageSenderId = lastMessageData?["senderId"] as? String
+            
+            // Check if this is a new message that should trigger a notification
+            let messageId = "\(id)_\(lastMessageText ?? "")_\(lastMessageSenderId ?? "")"
+            let isNewMessage = previousLastMessages[id] != messageId
+            let isFromOtherUser = lastMessageSenderId != currentUserId
+            let hasText = lastMessageText != nil && !lastMessageText!.isEmpty
+            let isNotActiveConversation = notificationService.activeConversationId != id
+            
+            // Trigger notification if this is a new message from someone else
+            if !isInitialLoad && isNewMessage && isFromOtherUser && hasText && isNotActiveConversation {
+                triggerNotification(
+                    conversationId: id,
+                    senderId: lastMessageSenderId!,
+                    messageText: lastMessageText!,
+                    conversationType: typeString,
+                    groupName: data?["groupName"] as? String
+                )
+            }
+            
+            // Update tracked last message
+            previousLastMessages[id] = messageId
             
             let timestamp = lastMessageData?["timestamp"] as? Timestamp
             let lastMessageTimestamp = timestamp?.dateValue()
@@ -74,7 +102,37 @@ class ConversationListViewModel: ObservableObject {
             )
         }
         
+        // Mark initial load as complete
+        if isInitialLoad {
+            isInitialLoad = false
+        }
+        
         print("✅ Loaded \(conversations.count) conversations")
+    }
+    
+    private func triggerNotification(
+        conversationId: String,
+        senderId: String,
+        messageText: String,
+        conversationType: String,
+        groupName: String?
+    ) {
+        Task {
+            do {
+                let senderData = try await firebaseService.fetchUserProfile(userId: senderId)
+                let senderName = senderData["displayName"] as? String ?? "Someone"
+                
+                notificationService.triggerLocalNotification(
+                    senderName: senderName,
+                    messageText: messageText,
+                    conversationId: conversationId,
+                    conversationType: conversationType,
+                    groupName: groupName
+                )
+            } catch {
+                print("❌ Failed to fetch sender: \(error)")
+            }
+        }
     }
     
     deinit {

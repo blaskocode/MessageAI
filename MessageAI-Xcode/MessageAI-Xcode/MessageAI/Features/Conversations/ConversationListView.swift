@@ -10,6 +10,7 @@ import SwiftUI
 struct ConversationListView: View {
     @StateObject private var viewModel = ConversationListViewModel()
     @EnvironmentObject var authViewModel: AuthViewModel
+    @State private var selectedConversationId: String?
     
     var body: some View {
         NavigationStack {
@@ -54,9 +55,24 @@ struct ConversationListView: View {
             }
             .onAppear {
                 viewModel.loadConversations()
+                // Clear badge count when viewing conversation list
+                NotificationService.shared.clearBadgeCount()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToConversation"))) { notification in
+                if let conversationId = notification.userInfo?["conversationId"] as? String {
+                    selectedConversationId = conversationId
+                }
+            }
+            .navigationDestination(item: $selectedConversationId) { conversationId in
+                ChatView(conversationId: conversationId)
             }
         }
     }
+}
+
+// Helper to make String identifiable for navigation
+extension String: @retroactive Identifiable {
+    public var id: String { self }
 }
 
 struct ConversationRow: View {

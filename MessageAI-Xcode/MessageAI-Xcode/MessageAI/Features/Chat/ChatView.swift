@@ -92,10 +92,18 @@ struct ChatView: View {
         .navigationTitle("Chat")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
+            print("👁️ [ChatView] Conversation opened: \(conversationId)")
             viewModel.loadMessages()
+            // Mark this conversation as active (prevents notifications for it)
+            NotificationService.shared.activeConversationId = conversationId
+            print("✅ [ChatView] Set active conversation ID: \(conversationId)")
         }
         .onDisappear {
+            print("👋 [ChatView] Conversation closed: \(conversationId)")
             viewModel.cleanup()
+            // Clear active conversation when leaving chat
+            NotificationService.shared.activeConversationId = nil
+            print("✅ [ChatView] Cleared active conversation ID")
         }
     }
     

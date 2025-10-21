@@ -21,11 +21,37 @@ class ChatViewModel: ObservableObject {
     }
     
     private let firebaseService = FirebaseService.shared
+    private let notificationService = NotificationService.shared
     private nonisolated(unsafe) var messageListener: ListenerRegistration?
     private nonisolated(unsafe) var typingListener: ListenerRegistration?
     
+    // Track previously seen message IDs to detect new messages
+    private var previousMessageIds: Set<String> = []
+    
+    // Track if this is the initial load (don't notify on first load)
+    private var isInitialLoad = true
+    
+    // Cache conversation details for notifications
+    private var conversationType: String?
+    private var groupName: String?
+    
     init(conversationId: String) {
         self.conversationId = conversationId
+        loadConversationDetails()
+    }
+    
+    // MARK: - Load Conversation Details
+    
+    private func loadConversationDetails() {
+        Task {
+            do {
+                let conversation = try await firebaseService.fetchConversation(conversationId: conversationId)
+                self.conversationType = conversation["type"] as? String
+                self.groupName = conversation["groupName"] as? String
+            } catch {
+                print("❌ Failed to load conversation details: \(error)")
+            }
+        }
     }
     
     // MARK: - Load Messages
@@ -72,7 +98,7 @@ class ChatViewModel: ObservableObject {
             let deliveredTo = data?["deliveredTo"] as? [String] ?? []
             let readBy = data?["readBy"] as? [String] ?? []
             
-            return Message(
+            let message = Message(
                 id: id,
                 senderId: senderId,
                 text: text,
@@ -83,10 +109,54 @@ class ChatViewModel: ObservableObject {
                 deliveredTo: deliveredTo,
                 readBy: readBy
             )
+            
+            // Check if this is a new message (not in previous set)
+            let isNewMessage = !previousMessageIds.contains(id)
+            let isFromOtherUser = senderId != currentUserId
+            let hasText = text != nil && !text!.isEmpty
+            let shouldNotify = !isInitialLoad && isNewMessage && isFromOtherUser && hasText
+            
+            // Trigger notification for new messages from other users (but not on initial load)
+            if shouldNotify {
+                triggerNotificationForMessage(message: message, senderId: senderId)
+            }
+            
+            return message
         }
         .sorted { $0.timestamp < $1.timestamp }
         
-        print("✅ Loaded \(messages.count) messages")
+        // Update previous message IDs for next comparison
+        previousMessageIds = Set(messages.map { $0.id })
+        
+        // Mark initial load as complete
+        if isInitialLoad {
+            isInitialLoad = false
+        }
+    }
+    
+    // MARK: - Notifications
+    
+    private func triggerNotificationForMessage(message: Message, senderId: String) {
+        guard let text = message.text else { return }
+        
+        // Fetch sender's display name
+        Task {
+            do {
+                let senderData = try await firebaseService.fetchUserProfile(userId: senderId)
+                let senderName = senderData["displayName"] as? String ?? "Someone"
+                
+                // Trigger local notification
+                notificationService.triggerLocalNotification(
+                    senderName: senderName,
+                    messageText: text,
+                    conversationId: conversationId,
+                    conversationType: conversationType ?? "direct",
+                    groupName: groupName
+                )
+            } catch {
+                print("❌ Failed to fetch sender for notification: \(error)")
+            }
+        }
     }
     
     // MARK: - Send Message
@@ -147,7 +217,7 @@ class ChatViewModel: ObservableObject {
                     isTyping: isTyping
                 )
             } catch {
-                print("❌ [ChatViewModel] Failed to update typing status: \(error)")
+                print("❌ Failed to update typing status: \(error)")
             }
         }
     }

@@ -35,7 +35,7 @@ MessageAI uses **MVVM (Model-View-ViewModel)** architecture with Firebase backen
 
 ## Implementation Details
 
-### Files Created and Their Roles
+### Files Created and Their Roles (23 total)
 
 #### App Layer (2 files)
 **MessageAIApp.swift**
@@ -52,7 +52,7 @@ MessageAI uses **MVVM (Model-View-ViewModel)** architecture with Firebase backen
 
 #### Service Layer (3 files)
 
-**FirebaseService.swift** (320 lines)
+**FirebaseService.swift** (330 lines)
 - Singleton pattern: `FirebaseService.shared`
 - All Firebase operations centralized here
 - Methods implemented:
@@ -103,7 +103,7 @@ MessageAI uses **MVVM (Model-View-ViewModel)** architecture with Firebase backen
 - Properties: senderId, text, mediaURL, timestamp, deliveredTo, readBy
 - Support for temporary IDs (optimistic updates)
 
-#### ViewModel Layer (3 files)
+#### ViewModel Layer (5 files)
 
 **AuthViewModel.swift** (@MainActor)
 - Published: `isAuthenticated`, `isLoading`, `errorMessage`
@@ -120,12 +120,24 @@ MessageAI uses **MVVM (Model-View-ViewModel)** architecture with Firebase backen
 - Proper cleanup in `deinit`
 
 **ConversationListViewModel.swift** (@MainActor)
-- Published: `conversations`, `showNewConversation`, `isLoading`
+- Published: `conversations`, `showNewConversation`, `showNewGroup`, `isLoading`
 - Manages conversation listener
 - Parses Firestore documents to Conversation models
 - Real-time updates
 
-#### View Layer (6 files)
+**NewConversationViewModel.swift** (@MainActor)
+- Published: `searchText`, `searchResults`, `isLoading`, `errorMessage`
+- Methods: `searchUsers()`, `createConversation()`
+- Implements user search with Firebase query
+- Handles conversation creation
+
+**NewGroupViewModel.swift** (@MainActor)
+- Published: `searchText`, `searchResults`, `selectedUserIds`, `groupName`, `isLoading`
+- Methods: `searchUsers()`, `toggleUserSelection()`, `createGroup()`
+- Multi-user selection logic
+- Group name validation (2-50 characters)
+
+#### View Layer (8 files)
 
 **AuthenticationView.swift**
 - Login/Signup toggle

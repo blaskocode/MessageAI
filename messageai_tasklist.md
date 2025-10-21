@@ -161,23 +161,26 @@ This project follows structured task management using installed Cursor rules:
 
 ---
 
-### 3.0 Configure Apple Push Notification Service (APNs)
-- [ ] 3.1 Create APNs Authentication Key
-  - Go to developer.apple.com
-  - Certificates, Identifiers & Profiles → Keys
-  - Click "+" to create new key
-  - Name: "MessageAI APNs Key"
-  - Enable "Apple Push Notifications service (APNs)"
-  - Download .p8 file (ONLY CHANCE TO DOWNLOAD)
-  - Note the Key ID
-- [ ] 3.2 Upload APNs key to Firebase
-  - Firebase Console → Project Settings
-  - Go to Cloud Messaging tab
-  - Under "APNs Authentication Key", click "Upload"
-  - Upload .p8 file
-  - Enter Team ID (from Apple Developer Portal)
-  - Enter Key ID
-  - Upload
+### 3.0 Configure Local Notifications (APNs Not Required for MVP)
+- [x] 3.1 Update NotificationService for local notifications
+  - Use UserNotifications framework
+  - Trigger notifications when Firestore detects new messages
+  - Track active conversation to prevent duplicate notifications
+  - No APNs setup required for MVP
+- [x] 3.2 Integrate with message listeners
+  - Update ChatViewModel to trigger notifications
+  - Fetch sender display name from Firestore
+  - Format notifications for direct vs. group chats
+  - Handle badge count updates
+- [x] 3.3 Add notification navigation
+  - Update ConversationListView to handle notification taps
+  - Navigate to correct conversation when notification is tapped
+  - Clear badge count when viewing conversation list
+
+**Note:** Remote push notifications (background/killed state) are post-MVP and require:
+- APNs Authentication Key setup
+- Firebase Cloud Messaging configuration
+- Activated Apple Developer Account
 
 **Security Check:** No code generation, skip security scan
 
@@ -403,26 +406,34 @@ mcp_semgrep_security_check for all .swift files
 
 ---
 
-### 11.0 Test Push Notifications
-**Goal:** Verify notifications work on physical devices
+### 11.0 Test Local Notifications
+**Goal:** Verify local notifications work on physical devices and simulator
 
 - [ ] 11.1 Test notification permissions
   - Fresh install
   - Verify permission request appears
   - Grant permissions
-- [ ] 11.2 Test foreground notifications
-  - App open
-  - Receive message
-  - Verify banner appears with sender name and preview
-- [ ] 11.3 Test notification tap
+- [ ] 11.2 Test foreground notifications (different conversations)
+  - Open conversation A on Device 1
+  - Send message from Device 2 to conversation B
+  - Verify notification appears on Device 1 with sender name and preview
+  - Verify NO notification appears for conversation A (currently active)
+- [ ] 11.3 Test notification format
+  - Direct chat: Verify shows "[Sender]: [Message]"
+  - Group chat: Verify shows "[Group Name] - [Sender]: [Message]"
+  - Verify message preview limited to 100 characters
+- [ ] 11.4 Test notification tap
   - Tap notification
-  - Verify opens correct conversation
-- [ ] 11.4 Test FCM token storage
-  - Sign in
-  - Verify fcmToken saved in Firestore user document
+  - Verify navigates to correct conversation
+  - Verify conversation loads properly
 - [ ] 11.5 Test badge count
-  - Receive messages
-  - Verify badge updates with unread count
+  - Receive multiple messages
+  - Verify badge increments correctly
+  - Open conversation list
+  - Verify badge clears
+- [ ] 11.6 Test no self-notification
+  - Send message from Device 1
+  - Verify Device 1 does NOT receive notification for own message
 
 **Security Scan:** If any notification code modified, scan those files
 

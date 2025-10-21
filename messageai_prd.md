@@ -121,19 +121,26 @@ MessageAI is a real-time messaging application that provides reliable, WhatsApp-
 - Sender sees "read" when recipient opens the conversation
 - Group messages show count of members who read (e.g., "Read by 3/5")
 
-### 5. Push Notifications
+### 5. Local Notifications (Foreground)
 **Priority:** P0 (Blocking)
 
-- Foreground notifications working (minimum requirement)
-- Display sender name and message preview
+- **Local notifications** triggered when new messages arrive via Firestore
+- Display sender name and message preview (first 100 characters)
 - Badge count for unread messages
 - Tap notification to open relevant chat
+- No notifications for active conversation
+- Different format for group vs. direct chats
+- Works without APNs (uses UserNotifications framework)
 
 **Acceptance Criteria:**
-- User receives notification when app is in foreground
-- Notification shows sender and message content
+- User receives notification when new message arrives in non-active conversation
+- Notification shows sender name and message content
+- Group notifications show: "[Group Name] - [Sender]: [Message]"
+- Direct notifications show: "[Sender Name]: [Message]"
 - Tapping notification navigates to correct conversation
-- Background/killed state notifications are attempted (nice-to-have)
+- Badge count updates correctly
+- No notification for self-sent messages
+- Background/remote push notifications are post-MVP (requires APNs)
 
 ### 6. Offline Support & Sync
 **Priority:** P0 (Blocking)
@@ -400,13 +407,13 @@ match /conversations/{conversationId} {
   - On app launch, sync Firestore → SwiftData
   - Don't try to make SwiftData primary persistence
 
-**9. Push Notification Setup**
-- ⚠️ **Problem:** FCM setup on iOS is complex (APNs certificates, tokens)
-- ✅ **Solution:** 
-  - Get it working in foreground first (easier)
-  - Upload APNs key to Firebase console
-  - Test on physical device (simulator doesn't support remote notifications)
-  - Use `.onReceive(NotificationCenter.default.publisher(...))` for foreground handling
+**9. Local Notification Setup**
+- ✅ **Solution:** Use UserNotifications framework for local notifications
+  - Trigger notifications when Firestore listener detects new messages
+  - Track active conversation to avoid duplicate notifications
+  - Works immediately without APNs setup
+  - Foreground notifications sufficient for MVP
+- ⚠️ **Post-MVP:** Remote push notifications require APNs certificates and paid/activated Apple Developer account
 
 **10. Background App Refresh**
 - ⚠️ **Problem:** iOS aggressively kills background processes

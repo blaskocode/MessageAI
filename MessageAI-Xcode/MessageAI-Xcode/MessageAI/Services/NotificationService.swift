@@ -7,15 +7,19 @@
 
 import Foundation
 import UIKit
-import FirebaseMessaging
 import UserNotifications
 
-/// Handles push notification setup and management
+/// Handles local notification setup and management
+@MainActor
 class NotificationService: NSObject, ObservableObject {
     
     static let shared = NotificationService()
     
-    @Published var fcmToken: String?
+    /// Tracks which conversation is currently active to avoid duplicate notifications
+    @Published var activeConversationId: String?
+    
+    /// Tracks unread message count for badge
+    @Published private(set) var unreadCount: Int = 0
     
     private override init() {
         super.init()
@@ -24,32 +28,98 @@ class NotificationService: NSObject, ObservableObject {
     
     func setupNotifications() {
         UNUserNotificationCenter.current().delegate = self
-        Messaging.messaging().delegate = self
-        
         requestPermission()
     }
     
     func requestPermission() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
-            if granted {
-                print("✅ Notification permission granted")
-                DispatchQueue.main.async {
-                    UIApplication.shared.registerForRemoteNotifications()
-                }
-            } else {
+            if !granted {
                 print("❌ Notification permission denied: \(error?.localizedDescription ?? "Unknown")")
             }
         }
     }
     
-    func saveFCMToken(for userId: String) async {
-        guard let token = fcmToken else { return }
+    // MARK: - Local Notification Methods
+    
+    /// Triggers a local notification for a new message
+    /// - Parameters:
+    ///   - senderName: Display name of the message sender
+    ///   - messageText: Content of the message
+    ///   - conversationId: ID of the conversation
+    ///   - conversationType: "direct" or "group"
+    ///   - groupName: Optional group name for group chats
+    func triggerLocalNotification(
+        senderName: String,
+        messageText: String,
+        conversationId: String,
+        conversationType: String,
+        groupName: String? = nil
+    ) {
+        // Don't notify if this is the active conversation
+        if activeConversationId == conversationId {
+            return
+        }
         
-        do {
-            try await FirebaseService.shared.updateUserProfile(userId: userId, updates: ["fcmToken": token])
-            print("✅ FCM token saved for user: \(userId)")
-        } catch {
-            print("❌ Error saving FCM token: \(error.localizedDescription)")
+        // Create notification content
+        let content = UNMutableNotificationContent()
+        
+        // Format title and body based on conversation type
+        if conversationType == "group", let groupName = groupName {
+            content.title = groupName
+            content.body = "\(senderName): \(messageText.prefix(100))"
+        } else {
+            content.title = senderName
+            content.body = String(messageText.prefix(100))
+        }
+        
+        content.sound = .default
+        content.badge = NSNumber(value: unreadCount + 1)
+        
+        // Add conversation ID to userInfo for navigation
+        content.userInfo = [
+            "conversationId": conversationId,
+            "senderId": senderName
+        ]
+        
+        // Create trigger (immediate)
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 0.1, repeats: false)
+        
+        // Create request
+        let request = UNNotificationRequest(
+            identifier: UUID().uuidString,
+            content: content,
+            trigger: trigger
+        )
+        
+        // Add notification
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("❌ Error showing notification: \(error)")
+            }
+        }
+        
+        // Increment badge count
+        incrementBadgeCount()
+    }
+    
+    /// Increments the unread message badge count
+    func incrementBadgeCount() {
+        unreadCount += 1
+        updateAppBadge()
+    }
+    
+    /// Clears the badge count (call when opening conversation list)
+    func clearBadgeCount() {
+        unreadCount = 0
+        updateAppBadge()
+    }
+    
+    /// Updates the app icon badge
+    private func updateAppBadge() {
+        UNUserNotificationCenter.current().setBadgeCount(unreadCount) { error in
+            if let error = error {
+                print("❌ Error updating badge count: \(error)")
+            }
         }
     }
 }
@@ -59,7 +129,7 @@ class NotificationService: NSObject, ObservableObject {
 extension NotificationService: UNUserNotificationCenterDelegate {
     
     // Handle notification when app is in foreground
-    func userNotificationCenter(
+    nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
@@ -69,7 +139,7 @@ extension NotificationService: UNUserNotificationCenterDelegate {
     }
     
     // Handle notification tap
-    func userNotificationCenter(
+    nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
@@ -78,21 +148,17 @@ extension NotificationService: UNUserNotificationCenterDelegate {
         
         // Extract conversation ID from notification
         if let conversationId = userInfo["conversationId"] as? String {
-            print("📱 Opening conversation: \(conversationId)")
-            // TODO: Navigate to conversation
+            // Post notification to trigger navigation
+            Task { @MainActor in
+                NotificationCenter.default.post(
+                    name: NSNotification.Name("NavigateToConversation"),
+                    object: nil,
+                    userInfo: ["conversationId": conversationId]
+                )
+            }
         }
         
         completionHandler()
-    }
-}
-
-// MARK: - MessagingDelegate
-
-extension NotificationService: MessagingDelegate {
-    
-    func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
-        self.fcmToken = fcmToken
-        print("✅ FCM Token received: \(fcmToken ?? "none")")
     }
 }
 

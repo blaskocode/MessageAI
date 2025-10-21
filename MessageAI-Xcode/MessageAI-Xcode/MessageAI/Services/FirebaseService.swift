@@ -105,6 +105,16 @@ class FirebaseService: ObservableObject {
         }
     }
     
+    func fetchUserProfile(userId: String) async throws -> [String: Any] {
+        let doc = try await db.collection("users").document(userId).getDocument()
+        
+        guard let data = doc.data() else {
+            throw NSError(domain: "FirebaseService", code: 404, userInfo: [NSLocalizedDescriptionKey: "User not found"])
+        }
+        
+        return data
+    }
+    
     func updateUserProfile(userId: String, updates: [String: Any]) async throws {
         try await db.collection("users").document(userId).updateData(updates)
     }
@@ -180,6 +190,16 @@ class FirebaseService: ObservableObject {
         
         listenerRegistrations.append(listener)
         return listener
+    }
+    
+    func fetchConversation(conversationId: String) async throws -> [String: Any] {
+        let doc = try await db.collection("conversations").document(conversationId).getDocument()
+        
+        guard let data = doc.data() else {
+            throw NSError(domain: "FirebaseService", code: 404, userInfo: [NSLocalizedDescriptionKey: "Conversation not found"])
+        }
+        
+        return data
     }
     
     // MARK: - Messages

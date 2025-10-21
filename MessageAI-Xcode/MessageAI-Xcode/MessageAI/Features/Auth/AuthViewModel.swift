@@ -48,9 +48,6 @@ class AuthViewModel: ObservableObject {
             isAuthenticated = true
             isLoading = false
             
-            // Save FCM token for notifications
-            await NotificationService.shared.saveFCMToken(for: userId)
-            
         } catch {
             errorMessage = "Sign up failed: \(error.localizedDescription)"
             isLoading = false
@@ -81,9 +78,6 @@ class AuthViewModel: ObservableObject {
             
             // Update online status
             try? await firebaseService.updateOnlineStatus(userId: userId, isOnline: true)
-            
-            // Save FCM token
-            await NotificationService.shared.saveFCMToken(for: userId)
             
         } catch {
             errorMessage = "Sign in failed: \(error.localizedDescription)"

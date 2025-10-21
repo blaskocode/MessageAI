@@ -1,0 +1,19 @@
+# Compiled JavaScript files
+lib/
+*.js
+*.js.map
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Node modules
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.*
+
