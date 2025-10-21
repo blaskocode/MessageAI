@@ -267,6 +267,25 @@ class FirebaseService: ObservableObject {
             print("✅ Marked \(updateCount) messages as read")
         }
     }
+    
+    func markMessageAsRead(conversationId: String, messageId: String, userId: String) async throws {
+        let messageRef = db.collection("conversations")
+            .document(conversationId)
+            .collection("messages")
+            .document(messageId)
+        
+        // Update the message's readBy array and status
+        try await messageRef.updateData([
+            "readBy": FieldValue.arrayUnion([userId]),
+            "status": "read"
+        ])
+        
+        // Always update the conversation's lastMessage.readBy in case this is the most recent message
+        // This is safe to do even if it's not the last message - it will just add to the array
+        try await db.collection("conversations").document(conversationId).updateData([
+            "lastMessage.readBy": FieldValue.arrayUnion([userId])
+        ])
+    }
 
     func findExistingDirectConversation(userId1: String, userId2: String) async throws -> String? {
         // Query for conversations where both users are participants and type is "direct"
@@ -357,6 +376,8 @@ class FirebaseService: ObservableObject {
         // Update conversation's lastMessage
         try await db.collection("conversations").document(conversationId).updateData([
             "lastMessage": [
+                "id": messageRef.documentID,
+                "messageId": messageRef.documentID,  // Include both for compatibility
                 "text": text,
                 "senderId": senderId,
                 "timestamp": FieldValue.serverTimestamp(),

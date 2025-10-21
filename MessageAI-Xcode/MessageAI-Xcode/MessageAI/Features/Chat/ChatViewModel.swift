@@ -117,6 +117,8 @@ class ChatViewModel: ObservableObject {
     }
 
     private func parseMessages(_ documents: [DocumentSnapshot]) {
+        guard let currentUserId = currentUserId else { return }
+        
         messages = documents.compactMap { doc -> Message? in
             let data = doc.data()
 
@@ -156,6 +158,11 @@ class ChatViewModel: ObservableObject {
             // Trigger notification for new messages from other users (but not on initial load)
             if shouldNotify {
                 triggerNotificationForMessage(message: message, senderId: senderId)
+            }
+            
+            // Automatically mark new incoming messages as read (since user is viewing the chat)
+            if !isInitialLoad && isNewMessage && isFromOtherUser && !readBy.contains(currentUserId) {
+                markMessageAsRead(messageId: id)
             }
 
             return message
@@ -281,6 +288,23 @@ class ChatViewModel: ObservableObject {
                 print("✅ Marked conversation \(conversationId) as read")
             } catch {
                 print("⚠️ Failed to mark as read: \(error)")
+            }
+        }
+    }
+    
+    private func markMessageAsRead(messageId: String) {
+        guard let userId = currentUserId else { return }
+        
+        Task {
+            do {
+                try await firebaseService.markMessageAsRead(
+                    conversationId: conversationId,
+                    messageId: messageId,
+                    userId: userId
+                )
+                print("✅ Marked message \(messageId) as read")
+            } catch {
+                print("⚠️ Failed to mark message as read: \(error)")
             }
         }
     }
