@@ -98,6 +98,82 @@ MessageAI/
 
 6. Build and run on a physical device (required for push notifications)
 
+## Running the Application
+
+### Opening the Project
+
+1. Navigate to the project directory:
+   ```bash
+   cd MessageAI/MessageAI-Xcode
+   ```
+
+2. Open the Xcode project:
+   ```bash
+   open MessageAI-Xcode.xcodeproj
+   ```
+   
+   Alternatively, you can double-click `MessageAI-Xcode.xcodeproj` in Finder.
+
+### Selecting a Simulator
+
+1. In Xcode, locate the scheme selector in the toolbar (top-left area)
+   - It displays the current target device/simulator
+
+2. Click on the device selector and choose a simulator:
+   - Select **"iPhone 15 Pro"** (or any iPhone model)
+   - Ensure the iOS version is **17.0 or newer**
+   
+   > **Note:** The app requires iOS 17+ due to SwiftData dependencies
+
+3. If you don't see iOS 17+ simulators:
+   - Go to **Xcode → Settings → Platforms**
+   - Download the iOS 17+ simulator runtime
+
+### Building and Running
+
+1. **Build the project** (⌘B or Product → Build):
+   - This compiles the code and checks for errors
+   - Wait for the build to complete successfully
+
+2. **Run the application** (⌘R or Product → Run):
+   - Xcode will launch the selected simulator
+   - The app will automatically install and launch
+   - First launch may take 30-60 seconds
+
+3. **Verify the build**:
+   - The simulator should display the authentication screen
+   - Check the Xcode console for any startup messages
+
+### Running on a Physical Device
+
+For full functionality (especially push notifications):
+
+1. Connect your iPhone via USB
+2. Select your iPhone from the device selector
+3. If prompted, trust the device and enable Developer Mode:
+   - On iPhone: Settings → Privacy & Security → Developer Mode → Enable
+4. Ensure your iPhone is running **iOS 17.0 or newer**
+5. Build and run (⌘R)
+
+> **Important:** Push notifications only work on physical devices, not simulators.
+
+### Troubleshooting
+
+**Build Errors:**
+- Clean build folder: Product → Clean Build Folder (⌘⇧K)
+- Delete derived data: Xcode → Settings → Locations → Derived Data → Delete
+- Verify Swift Package dependencies are resolved
+
+**Simulator Issues:**
+- Reset simulator: Device → Erase All Content and Settings
+- Quit and restart Xcode
+- Restart your Mac if simulator won't launch
+
+**Code Signing:**
+- Go to project settings → Signing & Capabilities
+- Select your Apple ID team
+- Xcode will automatically handle provisioning
+
 ## Testing
 
 ### Minimum Requirements
