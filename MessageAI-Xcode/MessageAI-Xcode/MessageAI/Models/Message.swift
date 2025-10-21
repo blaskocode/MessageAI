@@ -10,7 +10,7 @@ import SwiftData
 
 @Model
 class Message: Identifiable, Codable {
-    
+
     @Attribute(.unique) var id: String
     var senderId: String
     var text: String?
@@ -20,13 +20,13 @@ class Message: Identifiable, Codable {
     var status: MessageStatus
     var deliveredTo: [String]
     var readBy: [String]
-    
+
     // For optimistic updates - temporary ID before server confirmation
     var temporaryId: String?
     var isPending: Bool
-    
+
     var conversation: Conversation?
-    
+
     init(
         id: String,
         senderId: String,
@@ -52,16 +52,16 @@ class Message: Identifiable, Codable {
         self.temporaryId = temporaryId
         self.isPending = isPending
     }
-    
+
     // MARK: - Codable
-    
+
     enum CodingKeys: String, CodingKey {
         case id = "messageId"
         case senderId, text, mediaURL, mediaType
         case timestamp, status, deliveredTo, readBy
         case temporaryId, isPending
     }
-    
+
     required init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.id = try container.decode(String.self, forKey: .id)
@@ -76,7 +76,7 @@ class Message: Identifiable, Codable {
         self.temporaryId = try container.decodeIfPresent(String.self, forKey: .temporaryId)
         self.isPending = try container.decode(Bool.self, forKey: .isPending)
     }
-    
+
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)
@@ -107,4 +107,3 @@ enum MediaType: String, Codable {
     case image
     case gif
 }
-

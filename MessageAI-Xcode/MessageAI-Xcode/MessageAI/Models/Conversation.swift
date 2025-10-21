@@ -10,7 +10,7 @@ import SwiftData
 
 @Model
 class Conversation: Identifiable, Codable {
-    
+
     @Attribute(.unique) var id: String
     var type: ConversationType
     var participantIds: [String]
@@ -20,14 +20,15 @@ class Conversation: Identifiable, Codable {
     var lastMessageTimestamp: Date?
     var lastUpdated: Date
     var createdAt: Date
-    
+    var hasUnreadMessages: Bool = false
+
     // Group-specific
     var groupName: String?
     var createdBy: String?
-    
+
     @Relationship(deleteRule: .cascade, inverse: \Message.conversation)
     var messages: [Message]?
-    
+
     init(
         id: String,
         type: ConversationType,
@@ -38,6 +39,7 @@ class Conversation: Identifiable, Codable {
         lastMessageTimestamp: Date? = nil,
         lastUpdated: Date = Date(),
         createdAt: Date = Date(),
+        hasUnreadMessages: Bool = false,
         groupName: String? = nil,
         createdBy: String? = nil
     ) {
@@ -50,19 +52,20 @@ class Conversation: Identifiable, Codable {
         self.lastMessageTimestamp = lastMessageTimestamp
         self.lastUpdated = lastUpdated
         self.createdAt = createdAt
+        self.hasUnreadMessages = hasUnreadMessages
         self.groupName = groupName
         self.createdBy = createdBy
     }
-    
+
     // MARK: - Codable
-    
+
     enum CodingKeys: String, CodingKey {
         case id = "conversationId"
         case type, participantIds, participantDetails
         case lastMessageText, lastMessageSenderId, lastMessageTimestamp
         case lastUpdated, createdAt, groupName, createdBy
     }
-    
+
     required init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.id = try container.decode(String.self, forKey: .id)
@@ -77,7 +80,7 @@ class Conversation: Identifiable, Codable {
         self.groupName = try container.decodeIfPresent(String.self, forKey: .groupName)
         self.createdBy = try container.decodeIfPresent(String.self, forKey: .createdBy)
     }
-    
+
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)
@@ -92,6 +95,25 @@ class Conversation: Identifiable, Codable {
         try container.encodeIfPresent(groupName, forKey: .groupName)
         try container.encodeIfPresent(createdBy, forKey: .createdBy)
     }
+
+    // MARK: - Computed Properties
+
+    func displayName(currentUserId: String) -> String {
+        // For group chats, return the group name
+        if type == .group {
+            return groupName ?? "Group Chat"
+        }
+
+        // For direct chats, return the OTHER participant's name
+        let otherParticipantIds = participantIds.filter { $0 != currentUserId }
+
+        if let otherUserId = otherParticipantIds.first,
+           let participantInfo = participantDetails[otherUserId] {
+            return participantInfo.name
+        }
+
+        return "Chat"
+    }
 }
 
 // MARK: - Supporting Types
@@ -104,5 +126,5 @@ enum ConversationType: String, Codable {
 struct ParticipantInfo: Codable {
     let name: String
     let photoURL: String?
+    var isOnline: Bool?
 }
-

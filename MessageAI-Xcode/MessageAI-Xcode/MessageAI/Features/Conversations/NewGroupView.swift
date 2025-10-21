@@ -10,24 +10,19 @@ import SwiftUI
 struct NewGroupView: View {
     @Environment(\.dismiss) var dismiss
     @StateObject private var viewModel = NewGroupViewModel()
-    @State private var selectedConversationId: ConversationID?
-    
-    // Wrapper to make conversation ID identifiable
-    struct ConversationID: Identifiable, Hashable {
-        let id: String
-    }
-    
+    let onGroupCreated: (String) -> Void
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 // Custom Navigation Bar
                 customNavigationBar
-                
+
                 // Group Name Input
                 groupNameSection
-                
+
                 Divider()
-                
+
                 // User Selection List
                 userSelectionList
             }
@@ -41,25 +36,22 @@ struct NewGroupView: View {
                     Text(error)
                 }
             }
-            .navigationDestination(item: $selectedConversationId) { conversation in
-                ChatView(conversationId: conversation.id)
-            }
         }
     }
-    
+
     private var customNavigationBar: some View {
         HStack {
             Button("Cancel") {
                 dismiss()
             }
-            
+
             Spacer()
-            
+
             Text("New Group")
                 .font(.headline)
-            
+
             Spacer()
-            
+
             Button("Create") {
                 Task {
                     await createAndNavigate()
@@ -75,7 +67,7 @@ struct NewGroupView: View {
             alignment: .bottom
         )
     }
-    
+
     private var groupNameSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("GROUP NAME")
@@ -83,17 +75,17 @@ struct NewGroupView: View {
                 .foregroundColor(.secondary)
                 .padding(.horizontal)
                 .padding(.top, 12)
-            
+
             TextField("Enter group name", text: $viewModel.groupName)
                 .textFieldStyle(.roundedBorder)
                 .padding(.horizontal)
-            
+
             Text("SEARCH USERS")
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .padding(.horizontal)
                 .padding(.top, 8)
-            
+
             TextField("Search for users", text: $viewModel.searchText)
                 .textFieldStyle(.roundedBorder)
                 .padding(.horizontal)
@@ -104,7 +96,7 @@ struct NewGroupView: View {
                         await viewModel.searchUsers()
                     }
                 }
-            
+
             // Selected users count
             if viewModel.selectedUserIds.count > 0 {
                 Text("\(viewModel.selectedUserIds.count) user\(viewModel.selectedUserIds.count == 1 ? "" : "s") selected")
@@ -113,13 +105,13 @@ struct NewGroupView: View {
                     .padding(.horizontal)
                     .padding(.top, 4)
             }
-            
+
             Spacer()
                 .frame(height: 12)
         }
         .background(Color(.systemGroupedBackground))
     }
-    
+
     private var userSelectionList: some View {
         List {
             if viewModel.isLoading {
@@ -137,7 +129,7 @@ struct NewGroupView: View {
                     .foregroundColor(.gray)
                     .font(.subheadline)
             } else {
-                ForEach(Array(viewModel.searchResults.enumerated()), id: \.offset) { index, userData in
+                ForEach(Array(viewModel.searchResults.enumerated()), id: \.offset) { _, userData in
                     SelectableUserRow(
                         userData: userData,
                         isSelected: viewModel.isUserSelected(userId: userData["userId"] as? String ?? "")
@@ -150,17 +142,19 @@ struct NewGroupView: View {
             }
         }
     }
-    
+
     private var showErrorAlert: Binding<Bool> {
         Binding(
             get: { viewModel.errorMessage != nil },
             set: { if !$0 { viewModel.errorMessage = nil } }
         )
     }
-    
+
     private func createAndNavigate() async {
         if let conversationId = await viewModel.createGroup() {
-            selectedConversationId = ConversationID(id: conversationId)
+            // Dismiss sheet and navigate to group conversation in parent view
+            dismiss()
+            onGroupCreated(conversationId)
         }
     }
 }
@@ -171,7 +165,7 @@ struct SelectableUserRow: View {
     let userData: [String: Any]
     let isSelected: Bool
     let onTap: () -> Void
-    
+
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 12) {
@@ -184,19 +178,19 @@ struct SelectableUserRow: View {
                             .font(.headline)
                             .foregroundColor(.white)
                     )
-                
+
                 VStack(alignment: .leading, spacing: 4) {
                     Text(displayName)
                         .font(.headline)
                         .foregroundColor(.primary)
-                    
+
                     Text(email)
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
-                
+
                 Spacer()
-                
+
                 // Checkmark
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                     .foregroundColor(isSelected ? .blue : .gray)
@@ -205,17 +199,16 @@ struct SelectableUserRow: View {
             .padding(.vertical, 4)
         }
     }
-    
+
     private var displayName: String {
         userData["displayName"] as? String ?? "Unknown"
     }
-    
+
     private var email: String {
         userData["email"] as? String ?? ""
     }
 }
 
 #Preview {
-    NewGroupView()
+    NewGroupView { _ in }
 }
-

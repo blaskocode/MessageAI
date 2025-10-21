@@ -10,7 +10,7 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject var firebaseService: FirebaseService
     @StateObject private var authViewModel = AuthViewModel()
-    
+
     var body: some View {
         Group {
             if authViewModel.isAuthenticated {
@@ -29,4 +29,3 @@ struct ContentView: View {
     ContentView()
         .environmentObject(FirebaseService.shared)
 }
-

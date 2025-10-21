@@ -10,7 +10,7 @@ import SwiftData
 
 @Model
 class User: Identifiable, Codable {
-    
+
     @Attribute(.unique) var id: String
     var email: String
     var displayName: String
@@ -21,7 +21,7 @@ class User: Identifiable, Codable {
     var lastSeen: Date
     var createdAt: Date
     var fcmToken: String?
-    
+
     init(
         id: String,
         email: String,
@@ -45,16 +45,16 @@ class User: Identifiable, Codable {
         self.createdAt = createdAt
         self.fcmToken = fcmToken
     }
-    
+
     // MARK: - Codable
-    
+
     enum CodingKeys: String, CodingKey {
         case id = "userId"
         case email, displayName, profilePictureURL
         case profileColorHex, initials, isOnline
         case lastSeen, createdAt, fcmToken
     }
-    
+
     required init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.id = try container.decode(String.self, forKey: .id)
@@ -68,7 +68,7 @@ class User: Identifiable, Codable {
         self.createdAt = try container.decode(Date.self, forKey: .createdAt)
         self.fcmToken = try container.decodeIfPresent(String.self, forKey: .fcmToken)
     }
-    
+
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)
@@ -83,4 +83,3 @@ class User: Identifiable, Codable {
         try container.encodeIfPresent(fcmToken, forKey: .fcmToken)
     }
 }
-

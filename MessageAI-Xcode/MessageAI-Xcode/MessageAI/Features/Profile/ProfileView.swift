@@ -10,14 +10,15 @@ struct ProfileView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @State private var displayName = ""
     @State private var isEditing = false
-    
+    @State private var showLogoutConfirmation = false
+
     var body: some View {
         NavigationStack {
             Form {
                 Section {
                     HStack {
                         Spacer()
-                        
+
                         // Profile Picture Placeholder
                         Circle()
                             .fill(Color.blue)
@@ -28,12 +29,12 @@ struct ProfileView: View {
                                     .foregroundColor(.white)
                                     .fontWeight(.semibold)
                             }
-                        
+
                         Spacer()
                     }
                     .listRowBackground(Color.clear)
                 }
-                
+
                 Section("Profile Information") {
                     if isEditing {
                         TextField("Display Name", text: $displayName)
@@ -46,19 +47,25 @@ struct ProfileView: View {
                         }
                     }
                 }
-                
+
                 Section {
                     Button(isEditing ? "Save" : "Edit Profile") {
                         isEditing.toggle()
                         // TODO: Save profile changes
                     }
-                    
+
                     Button("Sign Out", role: .destructive) {
-                        authViewModel.signOut()
+                        showLogoutConfirmation = true
                     }
                 }
             }
             .navigationTitle("Profile")
+            .confirmationDialog("Are you sure you want to sign out?", isPresented: $showLogoutConfirmation, titleVisibility: .visible) {
+                Button("Sign Out", role: .destructive) {
+                    authViewModel.signOut()
+                }
+                Button("Cancel", role: .cancel) {}
+            }
         }
     }
 }
@@ -67,4 +74,3 @@ struct ProfileView: View {
     ProfileView()
         .environmentObject(AuthViewModel())
 }
-

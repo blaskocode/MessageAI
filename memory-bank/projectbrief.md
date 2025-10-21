@@ -26,17 +26,21 @@ Build a bulletproof messaging system where two users can reliably exchange messa
 The MVP succeeds when ALL 10 criteria pass:
 
 1. ✅ **PASS** - Two users can send text messages that appear instantly (< 1 second)
-2. ✅ **PASS** - Messages persist across app force-quit and restart
+2. ✅ **PASS** - Messages persist across app force-quit and restart  
 3. ✅ **PASS** - Offline scenario works: User A offline → User B sends → User A online → message appears
 4. ✅ **PASS** - Group chat with 3+ users works with proper attribution
-5. ✅ **PASS** - Read receipts update correctly in real-time
-6. ✅ **PASS** - Online/offline status indicators work
+5. ✅ **PASS** - Read receipts update correctly in real-time **[UI COMPLETE]**
+   - Direct chats show "Read" when message is read
+   - Group chats show "Read by X" with count
+6. ✅ **PASS** - Online/offline status indicators work **[UI COMPLETE]**
+   - Green/gray dots on conversation list
+   - Real-time updates for direct chats
 7. ✅ **PASS** - Typing indicators appear/disappear correctly
 8. ✅ **PASS** - Local notifications display in foreground (without APNs!)
 9. ✅ **PASS** - App handles rapid-fire messaging without crashes or lost messages
 10. ✅ **PASS** - Poor network conditions don't break the app
 
-**Result:** ✅ **ALL CRITERIA MET - MVP SUCCESS!**
+**Result:** ✅ **ALL CRITERIA MET WITH FULL UI/UX - TRUE MVP SUCCESS!**
 
 ---
 
@@ -94,8 +98,6 @@ The MVP succeeds when ALL 10 criteria pass:
 - [ ] Images & GIFs upload (P1 feature)
 - [ ] Profile picture upload (infrastructure ready)
 - [ ] APNs for background notifications (requires Apple account activation)
-- [ ] Read receipt UI polish
-- [ ] Online status UI indicators
 
 ### Out of Scope (Phase 2+)
 - AI features (thread summarization, action items, smart search)

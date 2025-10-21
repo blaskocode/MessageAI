@@ -10,13 +10,8 @@ import SwiftUI
 struct NewConversationView: View {
     @Environment(\.dismiss) var dismiss
     @StateObject private var viewModel = NewConversationViewModel()
-    @State private var selectedConversationId: ConversationID?
-    
-    // Wrapper to make conversation ID identifiable
-    struct ConversationID: Identifiable, Hashable {
-        let id: String
-    }
-    
+    let onConversationCreated: (String) -> Void
+
     var body: some View {
         NavigationStack {
             contentView
@@ -38,12 +33,9 @@ struct NewConversationView: View {
                         Text(error)
                     }
                 }
-                .navigationDestination(item: $selectedConversationId) { conversation in
-                    ChatView(conversationId: conversation.id)
-                }
         }
     }
-    
+
     private var contentView: some View {
         List {
             if viewModel.isLoading {
@@ -73,9 +65,9 @@ struct NewConversationView: View {
             }
         }
     }
-    
+
     private var userList: some View {
-        ForEach(Array(viewModel.searchResults.enumerated()), id: \.offset) { index, userData in
+        ForEach(Array(viewModel.searchResults.enumerated()), id: \.offset) { _, userData in
             UserRow(userData: userData) {
                 Task {
                     await createAndNavigate(withUserId: userData["userId"] as? String ?? "")
@@ -83,17 +75,19 @@ struct NewConversationView: View {
             }
         }
     }
-    
+
     private var showErrorAlert: Binding<Bool> {
         Binding(
             get: { viewModel.errorMessage != nil },
             set: { if !$0 { viewModel.errorMessage = nil } }
         )
     }
-    
+
     private func createAndNavigate(withUserId userId: String) async {
         if let conversationId = await viewModel.createConversation(withUserId: userId) {
-            selectedConversationId = ConversationID(id: conversationId)
+            // Dismiss sheet and navigate to conversation in parent view
+            dismiss()
+            onConversationCreated(conversationId)
         }
     }
 }
@@ -103,7 +97,7 @@ struct NewConversationView: View {
 struct UserRow: View {
     let userData: [String: Any]
     let onTap: () -> Void
-    
+
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 12) {
@@ -116,33 +110,32 @@ struct UserRow: View {
                             .font(.headline)
                             .foregroundColor(.white)
                     )
-                
+
                 VStack(alignment: .leading, spacing: 4) {
                     Text(displayName)
                         .font(.headline)
                         .foregroundColor(.primary)
-                    
+
                     Text(email)
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
-                
+
                 Spacer()
             }
             .padding(.vertical, 4)
         }
     }
-    
+
     private var displayName: String {
         userData["displayName"] as? String ?? "Unknown"
     }
-    
+
     private var email: String {
         userData["email"] as? String ?? ""
     }
 }
 
 #Preview {
-    NewConversationView()
+    NewConversationView { _ in }
 }
-
