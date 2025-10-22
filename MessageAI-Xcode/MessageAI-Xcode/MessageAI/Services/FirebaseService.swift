@@ -465,28 +465,20 @@ class FirebaseService: ObservableObject {
     }
 
     func observeUserPresence(userIds: [String], completion: @escaping ([String: Bool]) -> Void) -> [ListenerRegistration] {
-        var listeners: [ListenerRegistration] = []
-
-        for userId in userIds {
-            let listener = db.collection("users")
-                .document(userId)
-                .addSnapshotListener { snapshot, error in
-                    if let error = error {
-                        print("❌ [FirebaseService] Error observing presence for user \(userId): \(error.localizedDescription)")
-                        return
-                    }
-
-                    guard let data = snapshot?.data() else { return }
-
-                    let isOnline = data["isOnline"] as? Bool ?? false
-                    completion([userId: isOnline])
-                }
-
-            listeners.append(listener)
-            listenerRegistrations.append(listener)
+        // DEPRECATED: This method now uses Firebase Realtime Database (RTDB) instead of Firestore
+        // RTDB provides IMMEDIATE offline detection via server-side onDisconnect() callbacks
+        
+        // Use RealtimePresenceService for real-time presence observation
+        let realtimePresence = RealtimePresenceService.shared
+        
+        realtimePresence.observeMultipleUsers(userIds: userIds) { presenceUpdate in
+            completion(presenceUpdate)
         }
-
-        return listeners
+        
+        // Return empty array since RTDB handles its own listener registration internally
+        // The actual listeners are managed by RealtimePresenceService
+        print("✅ [FirebaseService] Delegating presence observation to RTDB for \(userIds.count) users")
+        return []
     }
 
     // MARK: - Helper Methods

@@ -8,6 +8,7 @@
 import SwiftUI
 import FirebaseCore
 import FirebaseFirestore
+import UIKit
 
 // MARK: - Firebase Configuration (must run BEFORE App initialization)
 private class FirebaseConfigurator {
@@ -25,6 +26,35 @@ private class FirebaseConfigurator {
     }
 }
 
+// MARK: - Presence Manager (using Firebase Realtime Database)
+@MainActor
+class PresenceManager: ObservableObject {
+    static let shared = PresenceManager()
+    
+    private let realtimePresence = RealtimePresenceService.shared
+    
+    private init() {
+        print("✅ PresenceManager initialized with RTDB")
+    }
+    
+    func startPresenceMonitoring(userId: String) {
+        // Use Firebase Realtime Database with onDisconnect()
+        // This provides IMMEDIATE offline detection when app force-quits
+        realtimePresence.goOnline(userId: userId)
+        print("✅ Presence monitoring started with RTDB onDisconnect()")
+    }
+    
+    func stopPresenceMonitoring(userId: String) {
+        // Manually mark offline (for sign-out scenarios)
+        realtimePresence.goOffline(userId: userId)
+        print("✅ User marked offline via RTDB")
+    }
+    
+    deinit {
+        print("🛑 PresenceManager deinitialized")
+    }
+}
+
 @main
 struct MessageAIApp: App {
 
@@ -33,6 +63,7 @@ struct MessageAIApp: App {
     // Force Firebase configuration before accessing FirebaseService
     private let firebaseConfigurator = FirebaseConfigurator.shared
     private let firebaseService = FirebaseService.shared
+    private let presenceManager = PresenceManager.shared
 
     var body: some Scene {
         WindowGroup {
@@ -49,21 +80,31 @@ struct MessageAIApp: App {
     private func handleScenePhaseChange(oldPhase: ScenePhase, newPhase: ScenePhase) {
         guard let userId = firebaseService.currentUserId else { return }
 
-        Task {
-            switch newPhase {
-            case .active:
-                // App came to foreground - user is online
-                try? await firebaseService.updateOnlineStatus(userId: userId, isOnline: true)
-                print("✅ User status: online")
+        print("🔄 Scene phase change: \(oldPhase) → \(newPhase)")
 
-            case .background, .inactive:
-                // App went to background or became inactive - user is offline
-                try? await firebaseService.updateOnlineStatus(userId: userId, isOnline: false)
-                print("✅ User status: offline")
+        switch newPhase {
+        case .active:
+            // App came to foreground - start presence monitoring
+            presenceManager.startPresenceMonitoring(userId: userId)
+            print("✅ User status: online (with heartbeat)")
 
-            @unknown default:
-                break
+        case .background:
+            // App went to background - mark offline immediately
+            print("⚠️ Marking user offline (background)...")
+            presenceManager.stopPresenceMonitoring(userId: userId)
+            print("✅ User status: offline (background)")
+            
+        case .inactive:
+            // Inactive is transitional - if coming from active, mark offline preemptively
+            if oldPhase == .active {
+                print("⚠️ Inactive from active - marking offline preemptively...")
+                presenceManager.stopPresenceMonitoring(userId: userId)
+            } else {
+                print("⚠️ User status: inactive (transitioning)")
             }
+            
+        @unknown default:
+            break
         }
     }
 }

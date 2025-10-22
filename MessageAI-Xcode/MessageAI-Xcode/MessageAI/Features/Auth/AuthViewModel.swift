@@ -76,8 +76,8 @@ class AuthViewModel: ObservableObject {
             isAuthenticated = true
             isLoading = false
 
-            // Update online status
-            try? await firebaseService.updateOnlineStatus(userId: userId, isOnline: true)
+            // Start presence monitoring with heartbeat
+            PresenceManager.shared.startPresenceMonitoring(userId: userId)
 
         } catch {
             errorMessage = "Sign in failed: \(error.localizedDescription)"
@@ -90,14 +90,9 @@ class AuthViewModel: ObservableObject {
 
     func signOut() async {
         do {
-            // Update online status before signing out
+            // Stop presence monitoring and mark offline
             if let userId = firebaseService.currentUserId {
-                do {
-                    try await firebaseService.updateOnlineStatus(userId: userId, isOnline: false)
-                    print("✅ User status set to offline before sign out")
-                } catch {
-                    print("⚠️ Failed to update online status: \(error)")
-                }
+                PresenceManager.shared.stopPresenceMonitoring(userId: userId)
             }
 
             try firebaseService.signOut()
