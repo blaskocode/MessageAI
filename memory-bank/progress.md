@@ -446,6 +446,46 @@ All critical bugs fixed. App working smoothly on physical devices and simulator.
 
 ### Issues Fixed - Session 2 (October 22, 2025)
 8. ❌ **Online presence persisting after force-quit** → ✅ **FIXED (Production Solution)**
+9. ❌ **FirebaseService.swift exceeding 500-line limit** (526 lines) → ✅ **FIXED (Refactored)**
+10. ❌ **Notifications not clearing after reading messages** → ✅ **FIXED (Auto-clear implementation)**
+11. ❌ **Visible scroll when opening conversations** → ✅ **FIXED (defaultScrollAnchor)**
+    - **Problem:** Messages appeared at top and visibly scrolled to bottom on load
+    - **Solution:** Use iOS 17+ `.defaultScrollAnchor(.bottom)` modifier
+    - **Result:** Chat opens instantly at bottom showing most recent messages
+12. ❌ **Keyboard covering recent messages** → ✅ **FIXED (@FocusState auto-scroll)**
+    - **Problem:** When keyboard appeared (especially after receiving messages), it covered recent messages
+    - **Solution:** Use `@FocusState` with `.focused()` and `.onChange()` to detect keyboard and auto-scroll
+    - **Files Modified:** `ChatView.swift` - Added @FocusState, .defaultScrollAnchor, .focused, .onChange handlers
+    - **Result:** ✅ Smooth UX - keyboard triggers auto-scroll to keep messages visible
+    - **Benefit:** Works for all scenarios (receiving/sending, 1-on-1/group chats)
+13. ❌ **Conversation list spacing not matching iMessage** → ✅ **FIXED (List row insets)**
+    - **Problem:** Conversation threads too far from left edge compared to native Messages app
+    - **Solution:** Reduced `.listRowInsets` leading edge from ~16pt to 8pt
+    - **Additional tweaks:** HStack spacing 14→12, removed horizontal padding
+    - **Files Modified:** `ConversationListView.swift` - Line 26 (listRowInsets), 117 (spacing), 188 (padding)
+    - **Result:** ✅ Conversations align with iMessage spacing
+    - **Benefit:** More native feel, matches iOS design patterns
+    - **Problem:** Notifications lingered in notification center after reading messages in app
+    - **Solution Part 1:** Use `conversationId` as notification identifier (not random UUID)
+    - **Solution Part 2:** Call `clearNotificationsForConversation()` when marking messages as read
+    - **Solution Part 3:** Add `.list` presentation option for notification center persistence
+    - **Files Modified:**
+      - `NotificationService.swift` - Changed identifier to conversationId, added clearNotificationsForConversation(), added .list option
+      - `ChatViewModel.swift` - Call clearNotificationsForConversation() in markMessagesAsRead()
+    - **Result:** ✅ Notifications persist in notification center and auto-clear when read
+    - **Benefit:** Clean notification management - no lingering notifications, single notification per conversation
+   - **Problem:** Violated mandatory file-size-limit rule (500-line max)
+   - **Solution:** Split into 5 focused services using Facade pattern
+   - **Services Created:**
+     - `FirebaseAuthService.swift` (139 lines) - Authentication
+     - `FirestoreUserService.swift` (102 lines) - User profiles
+     - `FirestoreConversationService.swift` (313 lines) - Conversations
+     - `FirestoreMessageService.swift` (107 lines) - Messages
+     - `FirebaseService.swift` (218 lines) - Facade/coordinator
+   - **Result:** ✅ All files now under 500 lines
+   - **Backward Compatibility:** ✅ Zero breaking changes (facade pattern)
+   - **Benefits:** Single Responsibility Principle, improved testability, better maintainability
+   - **Status:** ✅ **Production-ready** - No linter errors, all services compliant
    - **Problem:** When simulator was force-closed, user stayed online on other devices
    - **Root Cause:** App termination cannot execute cleanup code (fundamental iOS limitation)
    - **Failed Attempts:**

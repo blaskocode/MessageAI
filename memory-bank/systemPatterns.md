@@ -237,9 +237,37 @@ class PresenceManager: ObservableObject {
 
 ---
 
-#### Service Layer (4 files) ⭐
+#### Service Layer (8 files) ⭐ **REFACTORED October 22, 2025**
 
-**FirebaseService.swift** (357 lines) - **Centralized Firebase Operations**
+**FirebaseService.swift** (218 lines) - **Facade/Coordinator** ⭐
+- **Pattern:** Facade pattern with delegation to specialized services
+- **Purpose:** Maintains backward compatibility while delegating to domain-specific services
+- **Key Innovation:** Zero breaking changes despite major refactoring
+
+**Specialized Services:**
+
+**FirebaseAuthService.swift** (139 lines) - **Authentication Operations**
+- **Pattern:** Singleton
+- **Responsibility:** Auth operations, user profile creation during signup
+- **Methods:** signUp(), signIn(), signOut(), createUserProfile()
+
+**FirestoreUserService.swift** (102 lines) - **User Profile Management**
+- **Pattern:** Singleton
+- **Responsibility:** User CRUD operations, search functionality
+- **Methods:** fetchUserProfile(), updateUserProfile(), searchUsers()
+
+**FirestoreConversationService.swift** (313 lines) - **Conversation Management**
+- **Pattern:** Singleton with listener management
+- **Responsibility:** Conversation CRUD, read receipts, typing indicators
+- **Methods:** createConversation(), fetchConversations(), markConversationAsRead(), updateTypingStatus()
+
+**FirestoreMessageService.swift** (107 lines) - **Message Operations**
+- **Pattern:** Singleton with listener management
+- **Responsibility:** Message sending and fetching
+- **Methods:** sendMessage(), fetchMessages()
+
+**Original Implementation (Pre-Refactor):**
+**FirebaseService.swift** (526 lines) - **Centralized Firebase Operations** ❌ Exceeded 500-line limit
 - **Pattern:** Singleton with `FirebaseService.shared`
 - **Responsibility:** All Firebase operations, no business logic
 - **Key Innovation:** Proper listener lifecycle management
@@ -310,10 +338,10 @@ class NetworkMonitor: ObservableObject {
 
 ---
 
-**NotificationService.swift** (165 lines) ⭐ - **Local Notification Engine**
+**NotificationService.swift** (169 lines) ⭐ - **Local Notification Engine**
 - **Pattern:** Singleton with `NotificationService.shared`
 - **Protocols:** `UNUserNotificationCenterDelegate`
-- **Key Innovation:** Active conversation tracking to prevent duplicates
+- **Key Innovation:** Conversation-based notification tracking with auto-clear on read
 
 **Core Properties:**
 ```swift
@@ -326,9 +354,6 @@ class NotificationService: NSObject, ObservableObject {
     
     // Badge count management
     @Published private(set) var unreadCount: Int = 0
-    
-    // Current user ID for filtering
-    var currentUserId: String?
 }
 ```
 
@@ -337,7 +362,7 @@ class NotificationService: NSObject, ObservableObject {
 // Request notification permissions
 func requestPermission()
 
-// Trigger local notification
+// Trigger local notification (uses conversationId as identifier)
 func triggerLocalNotification(
     senderName: String,
     messageText: String,
@@ -351,6 +376,9 @@ func incrementBadgeCount()
 func clearBadgeCount()
 func updateAppBadge()
 
+// Clear notifications for specific conversation (auto-clear on read)
+func clearNotificationsForConversation(conversationId: String)
+
 // Delegate methods (nonisolated for Swift 6)
 nonisolated func userNotificationCenter(
     _ center: UNUserNotificationCenter,
@@ -363,6 +391,20 @@ nonisolated func userNotificationCenter(
     didReceive response: UNNotificationResponse,
     withCompletionHandler completionHandler: @escaping () -> Void
 )
+```
+
+**Notification Implementation Details:**
+```swift
+// Use conversationId as identifier for tracking and removal
+let request = UNNotificationRequest(
+    identifier: conversationId,  // Enables targeted removal
+    content: content,
+    trigger: nil  // Immediate delivery with persistence
+)
+
+// Presentation options include .list for notification center persistence
+completionHandler([.banner, .list, .sound, .badge])
+//                         ^^^^^ Critical for notification center visibility
 ```
 
 **Notification Formatting Logic:**
@@ -640,13 +682,42 @@ func triggerNotification(conversationId: String, senderId: String, messageText: 
 - Loading states
 - Error display
 
-**ChatView.swift** (177 lines)
+**ChatView.swift** (268 lines) ⭐ Updated Oct 22, 2025
 - ScrollView with LazyVStack for messages
+- **`.defaultScrollAnchor(.bottom)`** - Opens at bottom instantly (no visual scroll)
+- **`@FocusState` keyboard management** - Auto-scrolls when keyboard appears
 - MessageBubble components
 - Auto-scroll to bottom on new message
 - Typing indicator display above input
 - Input bar with TextField and send button
 - **Key:** Sets `NotificationService.shared.activeConversationId` on appear/disappear
+
+**Pattern: Smooth Scroll UX (Oct 22, 2025)**
+```swift
+// State management
+@FocusState private var isTextFieldFocused: Bool
+
+// No visual scroll on load
+ScrollView {
+    // ... messages
+}
+.defaultScrollAnchor(.bottom)  // Position at bottom before rendering
+
+// Auto-scroll when keyboard appears
+.onChange(of: isTextFieldFocused) { _, isFocused in
+    if isFocused, let lastMessage = viewModel.messages.last {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            withAnimation(.easeOut(duration: 0.25)) {
+                proxy.scrollTo(lastMessage.id, anchor: .bottom)
+            }
+        }
+    }
+}
+
+// Bind focus to TextField
+TextField("Message", text: $messageText, axis: .vertical)
+    .focused($isTextFieldFocused)
+```
 
 **Pattern: Active Conversation Tracking**
 ```swift
@@ -659,9 +730,12 @@ func triggerNotification(conversationId: String, senderId: String, messageText: 
 }
 ```
 
-**ConversationListView.swift** (110 lines)
+**ConversationListView.swift** (239 lines) ⭐ Updated Oct 22, 2025
 - List of conversations with real-time updates
-- Profile circles with initials and colors
+- **Spacing matched to iMessage** - `.listRowInsets(leading: 8)` for native feel
+- Profile circles with initials and colors (54x54pt)
+- Online status indicators (green/gray dots for direct chats)
+- Unread indicators (blue dots)
 - Last message preview and timestamp
 - Menu with "New Message" and "New Group" buttons
 - Sign out button in navigation bar

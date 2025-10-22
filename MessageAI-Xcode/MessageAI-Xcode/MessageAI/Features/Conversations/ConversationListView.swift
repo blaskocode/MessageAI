@@ -23,6 +23,7 @@ struct ConversationListView: View {
                     NavigationLink(destination: ChatView(conversationId: conversation.id)) {
                         ConversationRow(conversation: conversation, currentUserId: currentUserId)
                     }
+                    .listRowInsets(EdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8))
                     .listRowSeparator(.hidden)
                     .listRowBackground(Color.clear)
                 }
@@ -114,7 +115,7 @@ struct ConversationRow: View {
     let currentUserId: String
 
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 12) {
             // Unread indicator
             if conversation.hasUnreadMessages {
                 Circle()
@@ -185,7 +186,7 @@ struct ConversationRow: View {
             }
         }
         .padding(.vertical, 8)
-        .padding(.horizontal, 4)
+        .padding(.horizontal, 0)
         .background(Color(.systemBackground))
         .cornerRadius(12)
         .shadow(color: .black.opacity(0.03), radius: 1, y: 1)

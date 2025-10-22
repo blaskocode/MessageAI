@@ -286,6 +286,9 @@ class ChatViewModel: ObservableObject {
                     userId: userId
                 )
                 print("✅ Marked conversation \(conversationId) as read")
+                
+                // Clear any lingering notifications for this conversation
+                NotificationService.shared.clearNotificationsForConversation(conversationId: conversationId)
             } catch {
                 print("⚠️ Failed to mark as read: \(error)")
             }

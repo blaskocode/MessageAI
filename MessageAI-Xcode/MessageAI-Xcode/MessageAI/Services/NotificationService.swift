@@ -81,14 +81,12 @@ class NotificationService: NSObject, ObservableObject {
             "senderId": senderName
         ]
 
-        // Create trigger (immediate)
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 0.1, repeats: false)
-
-        // Create request
+        // Create request (use conversationId as identifier for tracking)
+        // Use nil trigger for immediate delivery that persists in notification center
         let request = UNNotificationRequest(
-            identifier: UUID().uuidString,
+            identifier: conversationId,
             content: content,
-            trigger: trigger
+            trigger: nil
         )
 
         // Add notification
@@ -113,6 +111,11 @@ class NotificationService: NSObject, ObservableObject {
         unreadCount = 0
         updateAppBadge()
     }
+    
+    /// Clears notifications for a specific conversation
+    func clearNotificationsForConversation(conversationId: String) {
+        UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [conversationId])
+    }
 
     /// Updates the app icon badge
     private func updateAppBadge() {
@@ -134,8 +137,8 @@ extension NotificationService: UNUserNotificationCenterDelegate {
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
-        // Show banner even when app is in foreground
-        completionHandler([.banner, .sound, .badge])
+        // Show banner and add to notification center even when app is in foreground
+        completionHandler([.banner, .list, .sound, .badge])
     }
 
     // Handle notification tap

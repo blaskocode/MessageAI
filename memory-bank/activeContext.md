@@ -422,7 +422,95 @@ No active development tasks. MVP is complete and working.
 
 ---
 
-## Latest Implementation: Firebase Realtime Database for Presence (October 22, 2025)
+## Latest Implementation: Chat Scroll UX Improvements (October 22, 2025)
+
+### Problem Statement
+Two UX issues degraded the chat experience:
+1. **Visual scroll on load:** Messages appeared at top and visibly scrolled to bottom when opening conversations
+2. **Keyboard covering messages:** When keyboard appeared (especially after receiving messages), it would cover the most recent messages
+
+### Solution Implemented
+**Two-part fix for smooth chat experience:**
+
+1. **Eliminate visual scroll with .defaultScrollAnchor(.bottom)** (ChatView.swift line 40)
+   - Uses iOS 17+ modifier to position ScrollView at bottom before rendering
+   - Removed manual scroll from `.onAppear` (only kept `markMessagesAsRead()`)
+   - Chat now opens instantly showing most recent messages
+
+2. **Auto-scroll when keyboard appears** (ChatView.swift lines 14, 66-75, 88)
+   - Added `@FocusState private var isTextFieldFocused: Bool`
+   - Bound focus state to TextField with `.focused($isTextFieldFocused)`
+   - Added `.onChange(of: isTextFieldFocused)` to ScrollView
+   - When TextField gains focus (keyboard appears), auto-scrolls to bottom
+   - 0.3 second delay allows keyboard animation to start
+   - Smooth `.easeOut(duration: 0.25)` animation
+
+### Result
+- ✅ No visible scroll - conversations open instantly at bottom
+- ✅ Keyboard doesn't cover messages - auto-scrolls to maintain visibility
+- ✅ Works for all scenarios - receiving messages, sending messages
+- ✅ Works for all chat types - one-on-one and group chats
+- ✅ Smooth, professional UX
+
+---
+
+## Previous Implementation: Notification Persistence & Auto-Clear (October 22, 2025)
+
+### Problem Statement
+Local notifications were not persisting in the notification center, and when users read messages without tapping notifications, the notifications would linger.
+
+### Solution Implemented
+**Three-part fix for complete notification management:**
+
+1. **Use conversationId as notification identifier** (NotificationService.swift line 87)
+   - Changed from `UUID().uuidString` to `conversationId`
+   - Allows tracking and removal of notifications by conversation
+   - Multiple messages from same conversation update single notification
+
+2. **Clear notifications when messages marked as read** (ChatViewModel.swift line 291)
+   - Added `NotificationService.shared.clearNotificationsForConversation(conversationId:)`
+   - Automatically removes notifications when user reads messages in app
+   - Called in `markMessagesAsRead()` method after Firestore update
+
+3. **Add .list presentation option** (NotificationService.swift line 141)
+   - Changed from `[.banner, .sound, .badge]` to `[.banner, .list, .sound, .badge]`
+   - **Critical fix:** `.list` option required for notifications to persist in notification center
+   - Without `.list`, notifications only show banner but don't appear when dragging down
+
+### Result
+- ✅ Notifications show banner popup
+- ✅ Notifications persist in notification center (drag down to see)
+- ✅ Notifications auto-clear when messages read in app
+- ✅ Notifications clear when tapped
+- ✅ No duplicate notifications per conversation
+- ✅ Clean notification center experience
+
+---
+
+## Previous Implementation: Firebase Service Refactoring (October 22, 2025)
+
+### Problem Statement
+**File size limit violation:** `FirebaseService.swift` exceeded the mandatory 500-line limit at 526 lines, violating the project's file-size-limit rule.
+
+### Solution: Service Layer Refactoring
+Split the monolithic service into focused, domain-specific services:
+- **FirebaseService.swift** (218 lines) - Facade/coordinator that delegates to specialized services
+- **FirebaseAuthService.swift** (139 lines) - Authentication operations
+- **FirestoreUserService.swift** (102 lines) - User profile management
+- **FirestoreConversationService.swift** (313 lines) - Conversation operations
+- **FirestoreMessageService.swift** (107 lines) - Message operations
+- **RealtimePresenceService.swift** (220 lines) - Already separate, RTDB presence
+
+### Key Benefits:
+- ✅ All files now under 500 lines (rule compliant)
+- ✅ Zero breaking changes - backward compatible facade pattern
+- ✅ Single Responsibility Principle enforced
+- ✅ Improved maintainability and testability
+- ✅ No linter errors
+
+---
+
+## Previous Implementation: Firebase Realtime Database for Presence (October 22, 2025)
 
 ### Problem Statement
 **Force-quit presence bug:** When users force-quit the app, crash, or device dies, they appeared online indefinitely because the app CANNOT execute code to mark itself offline.
@@ -517,4 +605,5 @@ Implemented **industry-standard** presence detection using Firebase Realtime Dat
 ---
 
 **Last Updated:** October 22, 2025  
-**Next Update:** After testing presence fix
+**Latest Change:** Adjusted conversation list spacing to match iMessage layout  
+**Status:** All services compliant, UI polished and pixel-perfect, production-ready

@@ -1,7 +1,20 @@
+/**
+ * MessageAI Cloud Functions
+ * 
+ * Exports:
+ * - MVP: Push notification functions
+ * - Phase 2: AI-powered features (translation, smart replies, etc.)
+ */
+
 import * as functions from 'firebase-functions/v2';
 import * as admin from 'firebase-admin';
 
+// Initialize Firebase Admin
 admin.initializeApp();
+
+// ============================================================================
+// MVP Functions - Push Notifications
+// ============================================================================
 
 /**
  * Cloud Function that sends push notifications when a new message is created
@@ -133,4 +146,35 @@ export const sendMessageNotification = functions.firestore.onDocumentCreated(
     }
   }
 );
+
+// ============================================================================
+// Phase 2 AI Functions
+// ============================================================================
+
+// Translation & Language Detection (PR #2)
+export { translateMessage } from './ai/translation';
+export { detectLanguage } from './ai/languageDetection';
+
+// Cultural Context (PR #3)
+// export { analyzeCulturalContext } from './ai/cultural';
+
+// Formality (PR #4)
+// export { analyzeFormality, adjustFormality } from './ai/formality';
+
+// Slang & Idioms (PR #5)
+// export { detectSlangIdioms, explainPhrase } from './ai/slang';
+
+// Embeddings & Search (PR #6)
+// export { generateEmbedding } from './ai/embeddings';
+// export { semanticSearch } from './ai/semanticSearch';
+
+// Smart Replies (PR #7)
+// export { generateSmartReplies } from './ai/smartReplies';
+// export { analyzeWritingStyle } from './ai/styleAnalysis';
+
+// AI Assistant (PR #8)
+// export { queryAIAssistant } from './ai/assistant';
+
+// Structured Data (PR #9)
+// export { extractStructuredData } from './ai/structuredData';
 

@@ -11,6 +11,7 @@ struct ChatView: View {
 
     @StateObject private var viewModel: ChatViewModel
     @State private var messageText = ""
+    @FocusState private var isTextFieldFocused: Bool
 
     init(conversationId: String) {
         self.conversationId = conversationId
@@ -36,11 +37,8 @@ struct ChatView: View {
                     }
                     .padding()
                 }
+                .defaultScrollAnchor(.bottom)
                 .onAppear {
-                    // Instantly scroll to bottom on load (no animation)
-                    if let lastMessage = viewModel.messages.last {
-                        proxy.scrollTo(lastMessage.id, anchor: .bottom)
-                    }
                     // Mark messages as read when view appears
                     viewModel.markMessagesAsRead()
                 }
@@ -60,6 +58,16 @@ struct ChatView: View {
                     if viewModel.isTyping, let lastMessage = viewModel.messages.last {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                            }
+                        }
+                    }
+                }
+                .onChange(of: isTextFieldFocused) { _, isFocused in
+                    // Auto-scroll when keyboard appears
+                    if isFocused, let lastMessage = viewModel.messages.last {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            withAnimation(.easeOut(duration: 0.25)) {
                                 proxy.scrollTo(lastMessage.id, anchor: .bottom)
                             }
                         }
@@ -87,6 +95,7 @@ struct ChatView: View {
             // Input Bar
             HStack(alignment: .bottom, spacing: 12) {
                 TextField("Message", text: $messageText, axis: .vertical)
+                    .focused($isTextFieldFocused)
                     .padding(10)
                     .background(Color(.systemGray6))
                     .cornerRadius(20)

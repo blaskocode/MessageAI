@@ -1,7 +1,7 @@
 {
   "name": "messageai-functions",
-  "version": "1.0.0",
-  "description": "Firebase Cloud Functions for MessageAI push notifications",
+  "version": "2.0.0",
+  "description": "Firebase Cloud Functions for MessageAI - Push Notifications and AI Features",
   "engines": {
     "node": "20"
   },
@@ -12,15 +12,21 @@
     "shell": "npm run build && firebase functions:shell",
     "start": "npm run shell",
     "deploy": "firebase deploy --only functions",
-    "logs": "firebase functions:log"
+    "logs": "firebase functions:log",
+    "test": "jest",
+    "test:watch": "jest --watch"
   },
   "dependencies": {
     "firebase-admin": "^12.0.0",
-    "firebase-functions": "^4.5.0"
+    "firebase-functions": "^5.0.0",
+    "openai": "^4.20.0"
   },
   "devDependencies": {
     "typescript": "^5.0.0",
-    "@types/node": "^20.0.0"
+    "@types/node": "^20.0.0",
+    "@types/jest": "^29.5.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.0"
   },
   "private": true
 }

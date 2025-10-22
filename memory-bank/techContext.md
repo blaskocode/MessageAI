@@ -31,7 +31,7 @@
 **UI Components Implemented:**
 - 8 View files:
   - `AuthenticationView.swift` (98 lines) - Login/signup UI
-  - `ChatView.swift` (177 lines) - Message display with auto-scroll
+  - `ChatView.swift` (268 lines) ⭐ **Updated Oct 22** - Smooth scroll UX with .defaultScrollAnchor & @FocusState
   - `ConversationListView.swift` (110 lines) - Conversation list with navigation
   - `NewConversationView.swift` (149 lines) - User search and selection
   - `NewGroupView.swift` (211 lines) - Group creation with custom nav
@@ -174,16 +174,20 @@ match /profile_pictures/{userId}/{fileName} {
    - Listener management with cleanup
    - Error handling throughout
 
-2. **NotificationService.swift** (165 lines) ⭐
+2. **NotificationService.swift** (169 lines) ⭐
    - **Local notification engine** using UserNotifications framework
    - Key Features:
+     - **conversationId-based notification tracking** (enables removal)
      - `activeConversationId` tracking to prevent duplicate notifications
      - `triggerLocalNotification()` method for creating notifications
+     - `clearNotificationsForConversation()` for auto-clearing on read
      - Badge count management (`incrementBadgeCount()`, `clearBadgeCount()`)
      - Group vs. direct notification formatting
      - Notification tap handling with navigation
+     - **.list presentation option** for notification center persistence
    - **No APNs required** - works with free developer account
    - Delegate: `UNUserNotificationCenterDelegate`
+   - **Production-quality:** Notifications persist in center and auto-clear on read
 
 3. **NetworkMonitor.swift** (82 lines)
    - Connectivity tracking using `NWPathMonitor`

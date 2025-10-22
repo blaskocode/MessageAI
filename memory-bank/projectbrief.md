@@ -192,6 +192,23 @@ The MVP succeeds when ALL 10 criteria pass:
 - **UX:** Typing indicator appears above input
 - **Polish:** Auto-scrolls to keep indicator visible
 
+### 5. Smart Notification Management (October 22, 2025)
+- **Challenge:** Notifications lingering after reading messages, not persisting in notification center
+- **Solution:** Three-part fix for production-quality notification handling
+  1. Use conversationId as notification identifier (enables tracking/removal)
+  2. Auto-clear notifications when messages marked as read
+  3. Include .list presentation option for notification center persistence
+- **Result:** Clean notification center, no duplicates, auto-clearing on read
+- **Innovation:** Single notification per conversation that updates and clears intelligently
+
+### 6. Smooth Chat Scroll UX (October 22, 2025)
+- **Challenge:** Visible scroll on conversation load, keyboard covering messages
+- **Solution:** Two-part fix using iOS 17+ features
+  1. `.defaultScrollAnchor(.bottom)` - Positions at bottom before rendering
+  2. `@FocusState` + `.onChange()` - Auto-scrolls when keyboard appears
+- **Result:** Instant bottom positioning, keyboard-aware scrolling
+- **Innovation:** Leverages SwiftUI focus state for seamless keyboard handling
+
 ---
 
 ## Testing Accomplishments ✅
