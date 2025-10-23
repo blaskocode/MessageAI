@@ -156,7 +156,14 @@ export { translateMessage } from './ai/translation';
 export { detectLanguage } from './ai/languageDetection';
 
 // Cultural Context (PR #3)
-// export { analyzeCulturalContext } from './ai/cultural';
+export { analyzeCulturalContext } from './ai/cultural';
+
+// ============================================================================
+// Firestore Triggers
+// ============================================================================
+
+// User Profile Updates - Propagate name/photo changes to all conversations
+export { onUserProfileUpdated } from './triggers/userProfileUpdated';
 
 // Formality (PR #4)
 // export { analyzeFormality, adjustFormality } from './ai/formality';

@@ -15,7 +15,7 @@ let openaiClient: OpenAI | null = null;
  */
 export function getOpenAIClient(): OpenAI {
   if (!openaiClient) {
-    const apiKey = process.env.OPENAI_API_KEY || functions.config().openai?.key;
+    const apiKey = process.env.OPENAI_API_KEY || functions.config().openai?.api_key;
     
     if (!apiKey) {
       throw new functions.https.HttpsError(

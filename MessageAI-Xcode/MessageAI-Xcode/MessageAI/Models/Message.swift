@@ -20,6 +20,9 @@ class Message: Identifiable, Codable {
     var status: MessageStatus
     var deliveredTo: [String]
     var readBy: [String]
+    
+    // AI Features (PR #2)
+    var detectedLanguage: String? // ISO 639-1 language code (e.g., "en", "es", "fr")
 
     // For optimistic updates - temporary ID before server confirmation
     var temporaryId: String?
@@ -37,6 +40,7 @@ class Message: Identifiable, Codable {
         status: MessageStatus = .sending,
         deliveredTo: [String] = [],
         readBy: [String] = [],
+        detectedLanguage: String? = nil,
         temporaryId: String? = nil,
         isPending: Bool = false
     ) {
@@ -49,6 +53,7 @@ class Message: Identifiable, Codable {
         self.status = status
         self.deliveredTo = deliveredTo
         self.readBy = readBy
+        self.detectedLanguage = detectedLanguage
         self.temporaryId = temporaryId
         self.isPending = isPending
     }
@@ -59,6 +64,7 @@ class Message: Identifiable, Codable {
         case id = "messageId"
         case senderId, text, mediaURL, mediaType
         case timestamp, status, deliveredTo, readBy
+        case detectedLanguage
         case temporaryId, isPending
     }
 
@@ -73,6 +79,7 @@ class Message: Identifiable, Codable {
         self.status = try container.decode(MessageStatus.self, forKey: .status)
         self.deliveredTo = try container.decode([String].self, forKey: .deliveredTo)
         self.readBy = try container.decode([String].self, forKey: .readBy)
+        self.detectedLanguage = try container.decodeIfPresent(String.self, forKey: .detectedLanguage)
         self.temporaryId = try container.decodeIfPresent(String.self, forKey: .temporaryId)
         self.isPending = try container.decode(Bool.self, forKey: .isPending)
     }
@@ -88,6 +95,7 @@ class Message: Identifiable, Codable {
         try container.encode(status, forKey: .status)
         try container.encode(deliveredTo, forKey: .deliveredTo)
         try container.encode(readBy, forKey: .readBy)
+        try container.encodeIfPresent(detectedLanguage, forKey: .detectedLanguage)
         try container.encodeIfPresent(temporaryId, forKey: .temporaryId)
         try container.encode(isPending, forKey: .isPending)
     }

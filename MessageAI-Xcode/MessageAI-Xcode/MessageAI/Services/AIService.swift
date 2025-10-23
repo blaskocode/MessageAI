@@ -26,39 +26,45 @@ class AIService: ObservableObject {
      */
     func translateMessage(
         messageId: String,
+        conversationId: String,
         targetLanguage: String
     ) async throws -> Translation {
-        isTranslating = true
-        defer { isTranslating = false }
-        
         let data: [String: Any] = [
             "messageId": messageId,
+            "conversationId": conversationId,
             "targetLanguage": targetLanguage
         ]
         
-        do {
-            let result = try await functions.httpsCallable("translateMessage").call(data)
-            
-            guard let response = result.data as? [String: Any],
-                  let originalText = response["originalText"] as? String,
-                  let translatedText = response["translatedText"] as? String,
-                  let originalLanguage = response["originalLanguage"] as? String,
-                  let targetLang = response["targetLanguage"] as? String else {
-                throw AIError.invalidResponse
+        return try await withCheckedThrowingContinuation { continuation in
+            let callable = functions.httpsCallable("translateMessage")
+            callable.call(data) { result, error in
+                if let error = error {
+                    continuation.resume(throwing: self.mapError(error))
+                    return
+                }
+                
+                guard let result = result,
+                      let response = result.data as? [String: Any],
+                      let originalText = response["originalText"] as? String,
+                      let translatedText = response["translatedText"] as? String,
+                      let originalLanguage = response["originalLanguage"] as? String,
+                      let targetLang = response["targetLanguage"] as? String else {
+                    continuation.resume(throwing: AIError.invalidResponse)
+                    return
+                }
+                
+                let cached = response["cached"] as? Bool ?? false
+                
+                let translation = Translation(
+                    originalText: originalText,
+                    translatedText: translatedText,
+                    originalLanguage: originalLanguage,
+                    targetLanguage: targetLang,
+                    cached: cached
+                )
+                
+                continuation.resume(returning: translation)
             }
-            
-            let cached = response["cached"] as? Bool ?? false
-            
-            return Translation(
-                originalText: originalText,
-                translatedText: translatedText,
-                originalLanguage: originalLanguage,
-                targetLanguage: targetLang,
-                cached: cached
-            )
-        } catch {
-            print("❌ Translation error: \(error.localizedDescription)")
-            throw mapError(error)
         }
     }
     
@@ -69,173 +75,182 @@ class AIService: ObservableObject {
      * Returns ISO 639-1 language code and confidence
      */
     func detectLanguage(text: String) async throws -> LanguageDetection {
-        isDetectingLanguage = true
-        defer { isDetectingLanguage = false }
-        
         let data: [String: Any] = [
             "text": text
         ]
         
-        do {
-            let result = try await functions.httpsCallable("detectLanguage").call(data)
-            
-            guard let response = result.data as? [String: Any],
-                  let language = response["language"] as? String,
-                  let confidence = response["confidence"] as? Double else {
-                throw AIError.invalidResponse
+        return try await withCheckedThrowingContinuation { continuation in
+            let callable = functions.httpsCallable("detectLanguage")
+            callable.call(data) { result, error in
+                if let error = error {
+                    continuation.resume(throwing: self.mapError(error))
+                    return
+                }
+                
+                guard let result = result,
+                      let response = result.data as? [String: Any],
+                      let language = response["language"] as? String,
+                      let confidence = response["confidence"] as? Double else {
+                    continuation.resume(throwing: AIError.invalidResponse)
+                    return
+                }
+                
+                let detection = LanguageDetection(
+                    language: language,
+                    confidence: confidence
+                )
+                
+                continuation.resume(returning: detection)
             }
-            
-            return LanguageDetection(
-                language: language,
-                confidence: confidence
-            )
-        } catch {
-            print("❌ Language detection error: \(error.localizedDescription)")
-            throw mapError(error)
         }
     }
     
     // MARK: - Cultural Context (PR #3)
     
     /**
-     * Analyze cultural context of a message
-     * Returns explanation if culturally significant
+     * Analyze cultural context in a message
+     * Detects indirect communication, idioms, formality customs, time concepts
      */
-    func analyzeCulturalContext(
-        text: String,
-        language: String,
-        targetLanguage: String
-    ) async throws -> CulturalContext? {
-        // Will be implemented in PR #3
+    func analyzeCulturalContext(text: String, sourceLanguage: String, targetLanguage: String) async throws -> CulturalContext {
+        return try await withCheckedThrowingContinuation { continuation in
+            let function = functions.httpsCallable("analyzeCulturalContext")
+            function.call([
+                "text": text,
+                "sourceLanguage": sourceLanguage,
+                "targetLanguage": targetLanguage
+            ]) { result, error in
+                if let error = error {
+                    continuation.resume(throwing: self.mapError(error))
+                    return
+                }
+                
+                guard let result = result,
+                      let data = result.data as? [String: Any] else {
+                    print("❌ [AIService] Cultural context: No data in response")
+                    continuation.resume(throwing: AIError.invalidResponse)
+                    return
+                }
+                
+                // Log the raw response for debugging
+                print("📦 [AIService] Cultural context response: \(data)")
+                
+                do {
+                    let jsonData = try JSONSerialization.data(withJSONObject: data)
+                    let context = try JSONDecoder().decode(CulturalContext.self, from: jsonData)
+                    continuation.resume(returning: context)
+                } catch {
+                    print("❌ [AIService] Failed to decode cultural context:")
+                    print("   Error: \(error)")
+                    print("   Data: \(data)")
+                    continuation.resume(throwing: AIError.invalidResponse)
+                }
+            }
+        }
+    }
+    
+    // MARK: - Placeholder Methods (To Be Implemented in Future PRs)
+    
+    /**
+     * Analyze formality of text (PR #4)
+     */
+    func analyzeFormality(text: String, language: String) async throws -> FormalityAnalysis {
         throw AIError.notImplemented
     }
     
-    // MARK: - Formality (PR #4)
-    
     /**
-     * Analyze formality level of text
-     */
-    func analyzeFormality(
-        text: String,
-        language: String
-    ) async throws -> FormalityAnalysis {
-        // Will be implemented in PR #4
-        throw AIError.notImplemented
-    }
-    
-    /**
-     * Adjust text to target formality level
+     * Adjust text to target formality level (PR #4)
      */
     func adjustFormality(
         text: String,
-        targetFormality: FormalityLevel,
+        targetLevel: FormalityLevel,
         language: String
     ) async throws -> String {
-        // Will be implemented in PR #4
         throw AIError.notImplemented
     }
     
-    // MARK: - Slang & Idioms (PR #5)
-    
     /**
-     * Detect slang and idioms in text
+     * Detect slang and idioms in text (PR #5)
      */
-    func detectSlangIdioms(
-        text: String,
-        language: String
-    ) async throws -> [DetectedPhrase] {
-        // Will be implemented in PR #5
+    func detectSlangIdioms(text: String, language: String) async throws -> [DetectedPhrase] {
         throw AIError.notImplemented
     }
     
     /**
-     * Explain a specific phrase
+     * Get detailed explanation of a phrase (PR #5)
      */
     func explainPhrase(
         phrase: String,
         language: String,
-        context: String
+        context: String?
     ) async throws -> PhraseExplanation {
-        // Will be implemented in PR #5
         throw AIError.notImplemented
     }
     
-    // MARK: - Smart Replies (PR #7)
-    
     /**
-     * Generate smart reply suggestions
+     * Generate smart reply suggestions (PR #7)
      */
     func generateSmartReplies(
         conversationId: String,
-        incomingMessageId: String,
-        userId: String
+        context: [Message],
+        incomingLanguage: String
     ) async throws -> [SmartReply] {
-        // Will be implemented in PR #7
         throw AIError.notImplemented
     }
     
-    // MARK: - Semantic Search (PR #6)
-    
     /**
-     * Perform semantic search across messages
+     * Semantic search across messages (PR #6)
      */
     func semanticSearch(
         query: String,
-        userId: String,
-        conversationId: String? = nil,
+        conversationId: String?,
         limit: Int = 10
     ) async throws -> [SearchResult] {
-        // Will be implemented in PR #6
         throw AIError.notImplemented
     }
     
-    // MARK: - AI Assistant (PR #8)
-    
     /**
-     * Query the AI assistant
+     * Query AI Assistant (PR #8)
      */
     func queryAIAssistant(
         query: String,
         userId: String
     ) async throws -> String {
-        // Will be implemented in PR #8
         throw AIError.notImplemented
     }
     
-    // MARK: - Structured Data (PR #9)
-    
     /**
-     * Extract structured data from message
+     * Extract structured data from text (PR #9)
      */
     func extractStructuredData(
-        messageId: String,
         text: String,
-        language: String,
-        conversationId: String
+        language: String
     ) async throws -> StructuredData? {
-        // Will be implemented in PR #9
         throw AIError.notImplemented
     }
     
     // MARK: - Error Handling
     
     private func mapError(_ error: Error) -> AIError {
-        if let functionsError = error as? FunctionsErrorCode {
-            switch functionsError {
-            case .unauthenticated:
+        let nsError = error as NSError
+        
+        // Check if it's a Firebase Functions error
+        if nsError.domain == "com.firebase.functions" {
+            switch nsError.code {
+            case FunctionsErrorCode.unauthenticated.rawValue:
                 return .unauthenticated
-            case .permissionDenied:
+            case FunctionsErrorCode.permissionDenied.rawValue:
                 return .permissionDenied
-            case .notFound:
+            case FunctionsErrorCode.notFound.rawValue:
                 return .notFound
-            case .invalidArgument:
+            case FunctionsErrorCode.invalidArgument.rawValue:
                 return .invalidArgument
-            case .deadlineExceeded:
+            case FunctionsErrorCode.deadlineExceeded.rawValue:
                 return .timeout
             default:
                 return .unknown(error.localizedDescription)
             }
         }
+        
         return .unknown(error.localizedDescription)
     }
 }
@@ -273,4 +288,3 @@ enum AIError: LocalizedError {
         }
     }
 }
-

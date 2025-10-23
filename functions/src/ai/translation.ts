@@ -41,12 +41,16 @@ export const translateMessage = functions.https.onCall(
 
       // Validate input
       validateMessageId(data.messageId);
+      validateMessageId(data.conversationId); // Reuse validation for conversationId
       validateLanguageCode(data.targetLanguage, 'targetLanguage');
 
-      console.log(`Translation request from ${userId}: message ${data.messageId} to ${data.targetLanguage}`);
+      console.log(`Translation request from ${userId}: message ${data.messageId} in conversation ${data.conversationId} to ${data.targetLanguage}`);
 
-      // Get message from Firestore
-      const message = await getMessage(data.messageId);
+      // Check if user has access to this conversation
+      await verifyMessageAccess(userId, data.conversationId);
+
+      // Get message from Firestore (now we know the conversation)
+      const message = await getMessage(data.messageId, data.conversationId);
 
       if (!message) {
         throw new functions.https.HttpsError(
@@ -55,11 +59,44 @@ export const translateMessage = functions.https.onCall(
         );
       }
 
-      // Check if user has access to this message
-      await verifyMessageAccess(userId, message.conversationId);
-
       const originalText = message.text;
-      const originalLanguage = message.detectedLanguage || 'unknown';
+      let originalLanguage = message.detectedLanguage;
+
+      console.log(`📝 Message text: "${originalText.substring(0, 50)}..."`);
+      console.log(`🔍 detectedLanguage from Firestore: "${originalLanguage || 'NULL'}"`);
+
+      // If language not detected yet, detect it now
+      if (!originalLanguage) {
+        console.log(`⚠️ Language not detected yet for message ${data.messageId}, detecting now...`);
+        try {
+          originalLanguage = await detectMessageLanguage(originalText);
+          console.log(`✅ Inline detection successful: ${originalLanguage}`);
+          
+          // Update message with detected language for future use
+          try {
+            await admin.firestore()
+              .collection('conversations')
+              .doc(data.conversationId)
+              .collection('messages')
+              .doc(data.messageId)
+              .update({
+                detectedLanguage: originalLanguage,
+              });
+            console.log(`💾 Updated Firestore with detected language: ${originalLanguage}`);
+          } catch (error) {
+            console.error(`❌ Failed to update message with detected language:`, error);
+            // Continue anyway - we have the language for this translation
+          }
+        } catch (detectionError) {
+          console.error(`❌ Language detection failed:`, detectionError);
+          throw new functions.https.HttpsError(
+            'internal',
+            'Failed to detect language: ' + (detectionError as Error).message
+          );
+        }
+      } else {
+        console.log(`✅ Language already detected: ${originalLanguage}`);
+      }
 
       // Skip translation if already in target language
       if (originalLanguage.toLowerCase() === data.targetLanguage.toLowerCase()) {
@@ -85,18 +122,20 @@ export const translateMessage = functions.https.onCall(
       );
 
       if (cached) {
-        console.log(`Cache hit for translation: ${cacheKey}`);
-        return {
+        console.log(`✅ Cache hit for translation: ${cacheKey}`);
+        const result = {
           originalText: cached.originalText,
           translatedText: cached.translatedText,
           originalLanguage: cached.originalLanguage,
           targetLanguage: cached.targetLanguage,
           cached: true,
         };
+        console.log(`📤 Returning cached result to client`);
+        return result;
       }
 
       // Not in cache, translate with OpenAI
-      console.log(`Translating: "${originalText.substring(0, 50)}..." from ${originalLanguage} to ${data.targetLanguage}`);
+      console.log(`🔄 Translating: "${originalText.substring(0, 50)}..." from ${originalLanguage} to ${data.targetLanguage}`);
 
       const translatedText = await translateWithOpenAI(
         originalText,
@@ -104,10 +143,12 @@ export const translateMessage = functions.https.onCall(
         data.targetLanguage
       );
 
+      console.log(`✅ OpenAI translation received: "${translatedText.substring(0, 50)}..."`);
+
       // Cache the translation
       const translationDoc: TranslationDocument = {
         messageId: data.messageId,
-        conversationId: message.conversationId,
+        conversationId: data.conversationId,
         originalText,
         originalLanguage,
         translatedText,
@@ -117,39 +158,55 @@ export const translateMessage = functions.https.onCall(
       };
 
       await setCached('translations', cacheKey, translationDoc);
+      console.log(`💾 Translation cached successfully`);
 
       // Update message with translation flag
       await admin.firestore()
+        .collection('conversations')
+        .doc(data.conversationId)
         .collection('messages')
         .doc(data.messageId)
         .update({
           hasTranslation: true,
         });
 
-      console.log(`Translation complete and cached: ${cacheKey}`);
+      console.log(`✅ Translation complete, preparing response`);
 
-      return {
+      const result = {
         originalText,
         translatedText,
         originalLanguage,
         targetLanguage: data.targetLanguage,
         cached: false,
       };
+      
+      console.log(`📤 Returning NEW translation to client (length: ${JSON.stringify(result).length} bytes)`);
+      
+      return result;
     } catch (error: any) {
+      console.error('❌ Translation function error:', {
+        error: error.message || error,
+        stack: error.stack,
+        code: error.code,
+        type: typeof error,
+      });
       return handleError(error, 'Failed to translate message');
     }
   }
 );
 
 /**
- * Get message from Firestore
+ * Get message from Firestore using conversationId for efficient lookup
  */
 async function getMessage(
-  messageId: string
-): Promise<{ text: string; conversationId: string; detectedLanguage?: string } | null> {
+  messageId: string,
+  conversationId: string
+): Promise<{ text: string; detectedLanguage?: string } | null> {
   try {
-    // Try direct message lookup first
+    // Direct lookup with known conversationId
     const messageDoc = await admin.firestore()
+      .collection('conversations')
+      .doc(conversationId)
       .collection('messages')
       .doc(messageId)
       .get();
@@ -158,36 +215,17 @@ async function getMessage(
       const data = messageDoc.data();
       return {
         text: data?.text || '',
-        conversationId: data?.conversationId || '',
         detectedLanguage: data?.detectedLanguage,
       };
-    }
-
-    // If not found, search in conversations subcollections
-    const conversationsSnapshot = await admin.firestore()
-      .collection('conversations')
-      .get();
-
-    for (const convDoc of conversationsSnapshot.docs) {
-      const msgDoc = await convDoc.ref
-        .collection('messages')
-        .doc(messageId)
-        .get();
-
-      if (msgDoc.exists) {
-        const data = msgDoc.data();
-        return {
-          text: data?.text || '',
-          conversationId: convDoc.id,
-          detectedLanguage: data?.detectedLanguage,
-        };
-      }
     }
 
     return null;
   } catch (error) {
     console.error('Error getting message:', error);
-    return null;
+    throw new functions.https.HttpsError(
+      'internal',
+      'Failed to retrieve message'
+    );
   }
 }
 
@@ -217,6 +255,39 @@ async function verifyMessageAccess(
       'permission-denied',
       'Not authorized to access this message'
     );
+  }
+}
+
+/**
+ * Detect the language of a message using OpenAI
+ * Returns ISO 639-1 language code (e.g., "en", "es", "fr")
+ */
+async function detectMessageLanguage(text: string): Promise<string> {
+  const systemPrompt = `You are a language detection expert. Detect the language of the following text and respond with ONLY the ISO 639-1 two-letter language code (e.g., "en" for English, "es" for Spanish, "fr" for French, "ja" for Japanese).
+
+If the text contains multiple languages, return the PRIMARY language code.
+Return ONLY the two-letter code, nothing else.`;
+
+  try {
+    const languageCode = await callOpenAI({
+      model: 'gpt-4-turbo-preview',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: text },
+      ],
+      temperature: 0.1, // Very low temperature for consistent detection
+      max_tokens: 10,
+    });
+
+    // Trim and lowercase the response
+    const detectedLanguage = languageCode.trim().toLowerCase();
+    console.log(`Detected language for "${text.substring(0, 30)}...": ${detectedLanguage}`);
+    
+    return detectedLanguage;
+  } catch (error) {
+    console.error('Language detection failed:', error);
+    // Default to 'en' if detection fails
+    return 'en';
   }
 }
 

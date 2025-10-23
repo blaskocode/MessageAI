@@ -6,12 +6,9 @@
 //
 
 import Foundation
-import SwiftData
 
-@Model
 class User: Identifiable, Codable {
-
-    @Attribute(.unique) var id: String
+    var id: String
     var email: String
     var displayName: String
     var profilePictureURL: String?
@@ -21,6 +18,10 @@ class User: Identifiable, Codable {
     var lastSeen: Date
     var createdAt: Date
     var fcmToken: String?
+    
+    // MARK: - AI Features (PR #2)
+    var fluentLanguages: [String] // ISO 639-1 language codes (e.g., ["en", "es", "fr"])
+    var culturalHintsEnabled: Bool // PR #3: Show cultural context hints
 
     init(
         id: String,
@@ -32,7 +33,9 @@ class User: Identifiable, Codable {
         isOnline: Bool = false,
         lastSeen: Date = Date(),
         createdAt: Date = Date(),
-        fcmToken: String? = nil
+        fcmToken: String? = nil,
+        fluentLanguages: [String] = ["en"], // Default to English
+        culturalHintsEnabled: Bool = true
     ) {
         self.id = id
         self.email = email
@@ -44,6 +47,8 @@ class User: Identifiable, Codable {
         self.lastSeen = lastSeen
         self.createdAt = createdAt
         self.fcmToken = fcmToken
+        self.fluentLanguages = fluentLanguages
+        self.culturalHintsEnabled = culturalHintsEnabled
     }
 
     // MARK: - Codable
@@ -53,6 +58,7 @@ class User: Identifiable, Codable {
         case email, displayName, profilePictureURL
         case profileColorHex, initials, isOnline
         case lastSeen, createdAt, fcmToken
+        case fluentLanguages, culturalHintsEnabled
     }
 
     required init(from decoder: Decoder) throws {
@@ -67,6 +73,9 @@ class User: Identifiable, Codable {
         self.lastSeen = try container.decode(Date.self, forKey: .lastSeen)
         self.createdAt = try container.decode(Date.self, forKey: .createdAt)
         self.fcmToken = try container.decodeIfPresent(String.self, forKey: .fcmToken)
+        // Backward compatibility: default values if not present
+        self.fluentLanguages = try container.decodeIfPresent([String].self, forKey: .fluentLanguages) ?? ["en"]
+        self.culturalHintsEnabled = try container.decodeIfPresent(Bool.self, forKey: .culturalHintsEnabled) ?? true
     }
 
     func encode(to encoder: Encoder) throws {
@@ -81,5 +90,7 @@ class User: Identifiable, Codable {
         try container.encode(lastSeen, forKey: .lastSeen)
         try container.encode(createdAt, forKey: .createdAt)
         try container.encodeIfPresent(fcmToken, forKey: .fcmToken)
+        try container.encode(fluentLanguages, forKey: .fluentLanguages)
+        try container.encode(culturalHintsEnabled, forKey: .culturalHintsEnabled)
     }
 }

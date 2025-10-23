@@ -951,6 +951,107 @@ if shouldNotify {
 
 ---
 
+### 8. Typing Status Expiration ✅ **NEW - October 23, 2025**
+**Purpose:** Prevent stale "Typing..." indicators when apps close/crash
+
+**Problem:** Typing status stayed `true` forever if user closed app while typing
+
+**Solution:** Timestamp-based expiration with 5-second timeout
+
+```swift
+// FirestoreConversationService.swift
+func observeTypingStatus(
+    conversationId: String,
+    currentUserId: String,
+    completion: @escaping (Bool) -> Void
+) -> ListenerRegistration {
+    let listener = db.collection("conversations")
+        .document(conversationId)
+        .collection("typing")
+        .addSnapshotListener { snapshot, error in
+            guard let documents = snapshot?.documents else {
+                completion(false)
+                return
+            }
+            
+            let now = Date()
+            let typingTimeout: TimeInterval = 5.0 // Expire after 5 seconds
+            
+            // Check if any other user is typing AND updated within last 5 seconds
+            let isAnyoneTyping = documents.contains { doc in
+                guard doc.documentID != currentUserId,
+                      let isTyping = doc.data()["isTyping"] as? Bool,
+                      isTyping == true else {
+                    return false
+                }
+                
+                // Check timestamp to expire old typing statuses
+                if let lastUpdated = doc.data()["lastUpdated"] as? Timestamp {
+                    let lastUpdatedDate = lastUpdated.dateValue()
+                    let timeSinceUpdate = now.timeIntervalSince(lastUpdatedDate)
+                    return timeSinceUpdate < typingTimeout
+                }
+                
+                // If no timestamp, don't show typing (safety fallback)
+                return false
+            }
+            
+            completion(isAnyoneTyping)
+        }
+    
+    return listener
+}
+```
+
+**Benefits:**
+- ✅ Automatically clears stale typing indicators
+- ✅ Works for force-quit, crash, battery death scenarios
+- ✅ No manual cleanup required
+- ✅ 5-second timeout feels natural (user stops typing for 5s = no longer typing)
+- ✅ Safety fallback for missing timestamps
+
+---
+
+### 9. Scroll Management Without UI Breaking ✅ **NEW - October 23, 2025**
+**Purpose:** Auto-scroll for new messages WITHOUT breaking UX when typing indicator appears
+
+**Problem:** Typing indicator appearing triggered scroll, pushing messages off-screen
+
+**Solution:** Only scroll for actual content changes, not ephemeral UI elements
+
+```swift
+// ChatView.swift - Only scroll for these events:
+
+// 1. New messages
+.onChange(of: viewModel.messages.count) {
+    handleScrollForNewMessage(proxy: proxy)
+}
+
+// 2. New translations
+.onChange(of: viewModel.translations) {
+    handleScrollForTranslation(proxy: proxy)
+}
+
+// 3. Keyboard appears
+.onChange(of: isTextFieldFocused) { _, isFocused in
+    handleScrollForKeyboard(proxy: proxy, isFocused: isFocused)
+}
+
+// ❌ REMOVED: .onChange(of: viewModel.isTyping)
+// Typing indicator is outside ScrollView and doesn't need scroll adjustments
+```
+
+**Key Insight:** Typing indicator is positioned **outside** the `ScrollView`, so it doesn't affect message layout. Scrolling when it appears/disappears was unnecessary and harmful.
+
+**Result:**
+- ✅ New messages auto-scroll to bottom
+- ✅ Translations auto-scroll to show translated text
+- ✅ Keyboard appearance auto-scrolls to keep input visible
+- ✅ Typing indicator appears/disappears WITHOUT scrolling messages
+- ✅ All messages stay visible on screen
+
+---
+
 ## Data Flow Patterns
 
 ### Message Send Flow (Complete)

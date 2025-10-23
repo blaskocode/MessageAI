@@ -93,6 +93,18 @@ class FirestoreMessageService: ObservableObject {
         return listener
     }
     
+    func updateMessage(
+        conversationId: String,
+        messageId: String,
+        updates: [String: Any]
+    ) async throws {
+        try await db.collection("conversations")
+            .document(conversationId)
+            .collection("messages")
+            .document(messageId)
+            .updateData(updates)
+    }
+    
     // MARK: - Cleanup
     
     nonisolated func removeAllListeners() {

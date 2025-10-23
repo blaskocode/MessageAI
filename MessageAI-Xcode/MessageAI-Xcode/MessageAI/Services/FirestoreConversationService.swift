@@ -283,13 +283,27 @@ class FirestoreConversationService: ObservableObject {
                     return
                 }
                 
+                let now = Date()
+                let typingTimeout: TimeInterval = 5.0 // Expire typing status after 5 seconds
+                
                 // Check if any other user (not current user) is typing
+                // AND their typing status was updated within the last 5 seconds
                 let isAnyoneTyping = documents.contains { doc in
                     guard doc.documentID != currentUserId,
-                          let isTyping = doc.data()["isTyping"] as? Bool else {
+                          let isTyping = doc.data()["isTyping"] as? Bool,
+                          isTyping == true else {
                         return false
                     }
-                    return isTyping
+                    
+                    // Check timestamp to expire old typing statuses
+                    if let lastUpdated = doc.data()["lastUpdated"] as? Timestamp {
+                        let lastUpdatedDate = lastUpdated.dateValue()
+                        let timeSinceUpdate = now.timeIntervalSince(lastUpdatedDate)
+                        return timeSinceUpdate < typingTimeout
+                    }
+                    
+                    // If no timestamp, don't show typing (safety fallback)
+                    return false
                 }
                 
                 completion(isAnyoneTyping)

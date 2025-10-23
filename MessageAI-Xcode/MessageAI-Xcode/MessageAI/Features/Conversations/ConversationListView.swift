@@ -13,6 +13,7 @@ struct ConversationListView: View {
     @State private var selectedConversationId: String?
     @State private var showLogoutConfirmation = false
     @State private var navigateToConversationId: String?
+    @State private var showProfile = false
 
     var body: some View {
         let currentUserId = FirebaseService.shared.currentUserId ?? ""
@@ -33,19 +34,14 @@ struct ConversationListView: View {
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    logoutButton
+                    profileButton
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     newMessageMenu
                 }
             }
-            .confirmationDialog("Are you sure you want to sign out?", isPresented: $showLogoutConfirmation, titleVisibility: .visible) {
-                Button("Sign Out", role: .destructive) {
-                    Task {
-                        await authViewModel.signOut()
-                    }
-                }
-                Button("Cancel", role: .cancel) {}
+            .sheet(isPresented: $showProfile) {
+                ProfileView()
             }
             .sheet(isPresented: $viewModel.showNewConversation) {
                 NewConversationView { conversationId in
@@ -80,9 +76,10 @@ struct ConversationListView: View {
         }
     }
 
-    private var logoutButton: some View {
-        Button(action: { showLogoutConfirmation = true }) {
-            Image(systemName: "rectangle.portrait.and.arrow.right")
+    private var profileButton: some View {
+        Button(action: { showProfile = true }) {
+            Image(systemName: "person.circle")
+                .font(.title3)
         }
     }
 
@@ -129,18 +126,33 @@ struct ConversationRow: View {
 
             // Profile Picture with color from participant details
             ZStack(alignment: .bottomTrailing) {
-                Circle()
-                    .fill(getProfileColor(for: conversation))
-                    .frame(width: 54, height: 54)
-                    .overlay {
-                        Circle()
-                            .strokeBorder(Color(.systemGray5), lineWidth: 0.5)
+                // Try to display profile photo, fall back to colored circle
+                // Validate URL: must be http(s) and not a color hex
+                if let photoURL = getProfilePhotoURL(for: conversation), 
+                   !photoURL.isEmpty,
+                   !photoURL.hasPrefix("#"),
+                   photoURL.hasPrefix("http") {
+                    AsyncImage(url: URL(string: photoURL)) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 54, height: 54)
+                                .clipShape(Circle())
+                                .overlay {
+                                    Circle()
+                                        .strokeBorder(Color(.systemGray5), lineWidth: 0.5)
+                                }
+                        case .failure, .empty:
+                            defaultProfileCircle(for: conversation)
+                        @unknown default:
+                            defaultProfileCircle(for: conversation)
+                        }
                     }
-                    .overlay {
-                        Text(getInitials(for: conversation))
-                            .font(.system(size: 18, weight: .semibold, design: .rounded))
-                            .foregroundColor(.white)
-                    }
+                } else {
+                    defaultProfileCircle(for: conversation)
+                }
 
                 // Online status indicator (only for direct chats)
                 if conversation.type == .direct {
@@ -230,6 +242,34 @@ struct ConversationRow: View {
             return details.isOnline ?? false // Default to offline if nil
         }
         return false // Default to offline
+    }
+    
+    private func getProfilePhotoURL(for conversation: Conversation) -> String? {
+        // For direct chats, get the other participant's photo URL
+        guard conversation.type == .direct else { return nil }
+        
+        let otherParticipantIds = conversation.participantIds.filter { $0 != currentUserId }
+        if let otherUserId = otherParticipantIds.first,
+           let details = conversation.participantDetails[otherUserId] {
+            return details.photoURL
+        }
+        
+        return nil
+    }
+    
+    private func defaultProfileCircle(for conversation: Conversation) -> some View {
+        Circle()
+            .fill(getProfileColor(for: conversation))
+            .frame(width: 54, height: 54)
+            .overlay {
+                Circle()
+                    .strokeBorder(Color(.systemGray5), lineWidth: 0.5)
+            }
+            .overlay {
+                Text(getInitials(for: conversation))
+                    .font(.system(size: 18, weight: .semibold, design: .rounded))
+                    .foregroundColor(.white)
+            }
     }
 }
 

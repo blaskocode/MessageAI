@@ -9,6 +9,7 @@
 
 export interface TranslationRequest {
   messageId: string;
+  conversationId: string;
   targetLanguage: string;
 }
 

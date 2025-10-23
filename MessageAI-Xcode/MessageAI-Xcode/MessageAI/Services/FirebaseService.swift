@@ -196,6 +196,18 @@ class FirebaseService: ObservableObject {
         )
     }
     
+    func updateMessage(
+        conversationId: String,
+        messageId: String,
+        updates: [String: Any]
+    ) async throws {
+        try await messageService.updateMessage(
+            conversationId: conversationId,
+            messageId: messageId,
+            updates: updates
+        )
+    }
+    
     // MARK: - Presence (delegates to RealtimePresenceService)
     
     func observeUserPresence(

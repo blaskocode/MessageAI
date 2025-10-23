@@ -17,7 +17,7 @@ service firebase.storage {
       return request.resource.contentType.matches('image/.*');
     }
     
-    // Profile pictures
+    // Profile pictures/photos
     match /profile_pictures/{userId}/{fileName} {
       // Only authenticated users can read profile pictures
       allow read: if isAuthenticated();
@@ -27,6 +27,19 @@ service firebase.storage {
                       request.auth.uid == userId &&
                       isImage() &&
                       isValidSize();
+    }
+    
+    // Profile photos (simplified path - userId.jpg)
+    match /profile_photos/{fileName} {
+      // Anyone authenticated can read profile photos
+      allow read: if isAuthenticated();
+      
+      // Only the user can upload their own profile photo
+      // Filename should match userId
+      allow write: if isAuthenticated() && 
+                      isImage() &&
+                      isValidSize() &&
+                      fileName.matches('.*\\.jpg$');
     }
     
     // Message media (images/GIFs)

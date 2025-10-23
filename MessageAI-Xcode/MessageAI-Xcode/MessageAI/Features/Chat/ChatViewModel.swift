@@ -15,15 +15,21 @@ class ChatViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var isTyping = false
     @Published var conversationTitle: String = "Chat"
-    @Published var senderDetails: [String: (name: String, initials: String, color: String)] = [:]
+    @Published var senderDetails: [String: (name: String, initials: String, color: String, photoURL: String?)] = [:]
+    
+    // User's fluent languages for translation filtering (PR #2)
+    @Published var userFluentLanguages: [String] = ["en"] // Default to English
+    
+    // User's cultural hints preference (PR #3)
+    @Published var culturalHintsEnabled: Bool = true // Default to enabled
 
     let conversationId: String
     var currentUserId: String? {
         firebaseService.currentUserId
     }
 
-    private let firebaseService = FirebaseService.shared
-    private let notificationService = NotificationService.shared
+    let firebaseService = FirebaseService.shared
+    let notificationService = NotificationService.shared
     private nonisolated(unsafe) var messageListener: ListenerRegistration?
     private nonisolated(unsafe) var typingListener: ListenerRegistration?
 
@@ -42,9 +48,27 @@ class ChatViewModel: ObservableObject {
     init(conversationId: String) {
         self.conversationId = conversationId
         loadConversationDetails()
+        loadUserFluentLanguages()
+        loadAutoTranslateSetting() // Load persisted auto-translate setting
         markMessagesAsRead()
     }
 
+    // MARK: - Auto-Translate Persistence
+    
+    private func loadAutoTranslateSetting() {
+        // Load per-conversation auto-translate setting from UserDefaults
+        let key = "autoTranslate_\(conversationId)"
+        autoTranslateEnabled = UserDefaults.standard.bool(forKey: key)
+        print("🔄 [Auto-Translate] Loaded setting for conversation \(conversationId): \(autoTranslateEnabled)")
+    }
+    
+    func saveAutoTranslateSetting() {
+        // Save per-conversation auto-translate setting to UserDefaults
+        let key = "autoTranslate_\(conversationId)"
+        UserDefaults.standard.set(autoTranslateEnabled, forKey: key)
+        print("💾 [Auto-Translate] Saved setting for conversation \(conversationId): \(autoTranslateEnabled)")
+    }
+    
     // MARK: - Load Conversation Details
 
     private func loadConversationDetails() {
@@ -84,11 +108,61 @@ class ChatViewModel: ObservableObject {
                 let name = userProfile["displayName"] as? String ?? "Unknown"
                 let initials = userProfile["initials"] as? String ?? "?"
                 let color = userProfile["profileColorHex"] as? String ?? "#4169E1"
-                senderDetails[userId] = (name: name, initials: initials.uppercased(), color: color)
+                let photoURL = userProfile["profilePictureURL"] as? String
+                senderDetails[userId] = (name: name, initials: initials.uppercased(), color: color, photoURL: photoURL)
             } catch {
                 print("❌ Failed to load sender details for \(userId): \(error)")
             }
         }
+    }
+    
+    // MARK: - Load User Fluent Languages
+    
+    private func loadUserFluentLanguages() {
+        guard let userId = currentUserId else { return }
+        
+        Task {
+            do {
+                let userDoc = try await firebaseService.fetchUserProfile(userId: userId)
+                if let languages = userDoc["fluentLanguages"] as? [String], !languages.isEmpty {
+                    self.userFluentLanguages = languages
+                    print("✅ Loaded fluent languages for user: \(languages)")
+                } else {
+                    // Default to English if not set
+                    self.userFluentLanguages = ["en"]
+                    print("⚠️ No fluent languages set, defaulting to English")
+                }
+                
+                // Load cultural hints preference (PR #3)
+                if let hintsEnabled = userDoc["culturalHintsEnabled"] as? Bool {
+                    self.culturalHintsEnabled = hintsEnabled
+                    print("✅ Loaded cultural hints preference: \(hintsEnabled)")
+                } else {
+                    // Default to enabled if not set
+                    self.culturalHintsEnabled = true
+                    print("⚠️ No cultural hints preference set, defaulting to enabled")
+                }
+            } catch {
+                print("❌ Failed to load user preferences: \(error)")
+                self.userFluentLanguages = ["en"] // Fallback
+                self.culturalHintsEnabled = true // Fallback
+            }
+        }
+    }
+    
+    /**
+     * Check if translate button should be shown for a message
+     * Only show if message is in a language the user is NOT fluent in
+     */
+    func shouldShowTranslateButton(for message: Message) -> Bool {
+        // Need detected language to make decision
+        guard let detectedLanguage = message.detectedLanguage else {
+            return false // Don't show button until language is detected
+        }
+        
+        // Check if message language is in user's fluent languages
+        // Show button only if NOT a fluent language
+        return !userFluentLanguages.contains(detectedLanguage.lowercased())
     }
 
     // MARK: - Load Messages
@@ -136,6 +210,7 @@ class ChatViewModel: ObservableObject {
             let mediaType = mediaTypeString.flatMap { MediaType(rawValue: $0) }
             let deliveredTo = data?["deliveredTo"] as? [String] ?? []
             let readBy = data?["readBy"] as? [String] ?? []
+            let detectedLanguage = data?["detectedLanguage"] as? String // PR #2: Language detection
 
             let message = Message(
                 id: id,
@@ -146,7 +221,8 @@ class ChatViewModel: ObservableObject {
                 timestamp: timestamp,
                 status: status,
                 deliveredTo: deliveredTo,
-                readBy: readBy
+                readBy: readBy,
+                detectedLanguage: detectedLanguage
             )
 
             // Check if this is a new message (not in previous set)
@@ -154,6 +230,20 @@ class ChatViewModel: ObservableObject {
             let isFromOtherUser = senderId != currentUserId
             let hasText = text != nil && !text!.isEmpty
             let shouldNotify = !isInitialLoad && isNewMessage && isFromOtherUser && hasText
+            
+            // Trigger language detection for new messages if not already detected (PR #2)
+            if isNewMessage && hasText && detectedLanguage == nil {
+                Task {
+                    await self.detectAndUpdateLanguage(messageId: id, text: text!)
+                }
+            }
+            
+            // Check auto-translate for new incoming messages (PR #3)
+            if !isInitialLoad && isNewMessage && isFromOtherUser && hasText {
+                Task {
+                    await self.checkAutoTranslate(for: message)
+                }
+            }
 
             // Trigger notification for new messages from other users (but not on initial load)
             if shouldNotify {
@@ -237,6 +327,11 @@ class ChatViewModel: ObservableObject {
             }
 
             print("✅ Message sent: \(messageId)")
+            
+            // Detect language in background (PR #2)
+            Task {
+                await detectAndUpdateLanguage(messageId: messageId, text: text)
+            }
 
         } catch {
             // Mark message as failed
@@ -311,6 +406,21 @@ class ChatViewModel: ObservableObject {
             }
         }
     }
+
+    // MARK: - Translation (PR #2 & PR #3)
+    
+    @Published var translations: [String: Translation] = [:]
+    @Published var isTranslating: [String: Bool] = [:]
+    @Published var translationErrors: [String: String] = [:]
+    
+    // Auto-translate mode (PR #3)
+    @Published var autoTranslateEnabled: Bool = false
+    @Published var culturalContexts: [String: CulturalContext] = [:]
+    @Published var dismissedHints: Set<String> = []
+    
+    let aiService = AIService.shared
+    
+    // Translation methods moved to ChatViewModel+Translation.swift extension
 
     // MARK: - Cleanup
 

@@ -7,7 +7,7 @@ import Foundation
 
 // MARK: - Translation
 
-struct Translation: Codable, Identifiable {
+struct Translation: Codable, Identifiable, Equatable {
     let id = UUID()
     let originalText: String
     let translatedText: String
@@ -17,6 +17,15 @@ struct Translation: Codable, Identifiable {
     
     enum CodingKeys: String, CodingKey {
         case originalText, translatedText, originalLanguage, targetLanguage, cached
+    }
+    
+    // Equatable conformance (auto-synthesized by Swift)
+    static func == (lhs: Translation, rhs: Translation) -> Bool {
+        return lhs.originalText == rhs.originalText &&
+               lhs.translatedText == rhs.translatedText &&
+               lhs.originalLanguage == rhs.originalLanguage &&
+               lhs.targetLanguage == rhs.targetLanguage &&
+               lhs.cached == rhs.cached
     }
 }
 
@@ -29,10 +38,39 @@ struct LanguageDetection: Codable {
 
 // MARK: - Cultural Context (PR #3)
 
-struct CulturalContext: Codable {
+enum CulturalContextCategory: String, Codable {
+    case indirectCommunication = "indirect_communication"
+    case idiom = "idiom"
+    case formality = "formality"
+    case timeConcept = "time_concept"
+    case other = "other"
+}
+
+struct CulturalContext: Codable, Identifiable {
+    let id = UUID()
     let hasContext: Bool
     let explanation: String?
+    let category: CulturalContextCategory?
     let confidence: Double
+    let sourceLanguage: String
+    let targetLanguage: String
+    
+    enum CodingKeys: String, CodingKey {
+        case hasContext, explanation, category, confidence, sourceLanguage, targetLanguage
+    }
+    
+    // Custom decoder to handle missing/invalid category gracefully
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        hasContext = try container.decode(Bool.self, forKey: .hasContext)
+        explanation = try container.decodeIfPresent(String.self, forKey: .explanation)
+        confidence = try container.decode(Double.self, forKey: .confidence)
+        sourceLanguage = try container.decode(String.self, forKey: .sourceLanguage)
+        targetLanguage = try container.decode(String.self, forKey: .targetLanguage)
+        
+        // Try to decode category, but default to nil if it fails
+        category = try? container.decodeIfPresent(CulturalContextCategory.self, forKey: .category)
+    }
 }
 
 // MARK: - Formality (PR #4)
@@ -185,29 +223,15 @@ struct StructuredData: Codable {
 // MARK: - User AI Preferences
 
 extension User {
-    /// User's fluent languages (ISO 639-1 codes)
-    var fluentLanguages: [String] {
-        // Will be stored in Firestore user document
-        // Default to empty array for now, will be implemented in PR #2
-        return []
-    }
-    
-    /// User's primary language
+    /// User's primary language (computed from fluentLanguages)
     var primaryLanguage: String {
-        // Default to English, will be configurable
-        return "en"
+        return fluentLanguages.first ?? "en"
     }
     
-    /// Auto-translate enabled flag
+    /// Auto-translate enabled flag (will be implemented in PR #3)
     var autoTranslateEnabled: Bool {
-        // Will be implemented in PR #3
+        // TODO: Store this in User model as stored property
         return false
-    }
-    
-    /// Cultural hints enabled flag
-    var culturalHintsEnabled: Bool {
-        // Will be implemented in PR #3
-        return true
     }
     
     /// Smart replies enabled flag
