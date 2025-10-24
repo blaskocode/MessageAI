@@ -93,6 +93,38 @@ class FirestoreMessageService: ObservableObject {
         return listener
     }
     
+    func fetchRecentMessages(
+        conversationId: String,
+        limit: Int,
+        completion: @escaping ([DocumentSnapshot]) -> Void
+    ) -> ListenerRegistration {
+        return db.collection("conversations")
+            .document(conversationId)
+            .collection("messages")
+            .order(by: "timestamp", descending: true)
+            .limit(to: limit)
+            .addSnapshotListener { snapshot, error in
+                guard let documents = snapshot?.documents else { return }
+                completion(documents.reversed()) // Chronological order
+            }
+    }
+    
+    func fetchMessagesBefore(
+        conversationId: String,
+        before: DocumentSnapshot,
+        limit: Int
+    ) async throws -> [DocumentSnapshot] {
+        let snapshot = try await db.collection("conversations")
+            .document(conversationId)
+            .collection("messages")
+            .order(by: "timestamp", descending: true)
+            .start(afterDocument: before)
+            .limit(to: limit)
+            .getDocuments()
+        
+        return snapshot.documents.reversed()
+    }
+    
     func updateMessage(
         conversationId: String,
         messageId: String,

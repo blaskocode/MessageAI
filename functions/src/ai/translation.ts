@@ -270,7 +270,7 @@ Return ONLY the two-letter code, nothing else.`;
 
   try {
     const languageCode = await callOpenAI({
-      model: 'gpt-4-turbo-preview',
+      model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: text },
@@ -302,7 +302,7 @@ async function translateWithOpenAI(
   const systemPrompt = buildTranslationPrompt(sourceLanguage, targetLanguage);
 
   const translatedText = await callOpenAI({
-    model: 'gpt-4-turbo-preview',
+    model: 'gpt-4o-mini',
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: text },

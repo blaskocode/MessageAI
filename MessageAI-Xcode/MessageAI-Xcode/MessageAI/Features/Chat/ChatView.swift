@@ -12,6 +12,7 @@ struct ChatView: View {
     @StateObject private var viewModel: ChatViewModel
     @State private var messageText = ""
     @FocusState private var isTextFieldFocused: Bool
+    @State private var showingAIAssistant = false
 
     init(conversationId: String) {
         self.conversationId = conversationId
@@ -23,6 +24,25 @@ struct ChatView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 16) {
+                    // Pagination loading indicator at top
+                    if viewModel.isLoadingMore {
+                        HStack {
+                            Spacer()
+                            ProgressView()
+                                .padding(.vertical, 8)
+                            Spacer()
+                        }
+                    } else if let error = viewModel.paginationError {
+                        Button(action: {
+                            Task { await viewModel.loadMoreMessages() }
+                        }) {
+                            Text(error)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .padding(.vertical, 8)
+                        }
+                    }
+                    
                     ForEach(viewModel.messages) { message in
                         MessageBubble(
                             message: message,
@@ -32,27 +52,58 @@ struct ChatView: View {
                             viewModel: viewModel
                         )
                         .id(message.id)
-                        .transition(.scale.combined(with: .opacity))
+                        .transition(.opacity) // Simpler transition for better performance
+                        .onAppear {
+                            // Trigger pagination when approaching top
+                            if viewModel.messages.firstIndex(where: { $0.id == message.id }) ?? 0 < 5 {
+                                if !viewModel.isPaginationTriggered {
+                                    viewModel.isPaginationTriggered = true
+                                    Task { 
+                                        await viewModel.loadMoreMessages()
+                                        viewModel.isPaginationTriggered = false
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
                 .padding()
-                .padding(.bottom, 32) // Extra padding so typing indicator doesn't cover last message
+                .background(
+                    GeometryReader { geometry in
+                        Color.clear.preference(
+                            key: ScrollOffsetPreferenceKey.self,
+                            value: geometry.frame(in: .named("scroll")).minY
+                        )
+                    }
+                )
             }
-            .defaultScrollAnchor(.bottom)
+            .coordinateSpace(name: "scroll")
+            .scrollBounceBehavior(.basedOnSize)
+            .onPreferenceChange(ScrollOffsetPreferenceKey.self) { offset in
+                // Throttle scroll position updates for better performance
+                let isAtBottom = offset > -100
+                if viewModel.isAtBottom != isAtBottom {
+                    // Use a small delay to throttle rapid updates
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        viewModel.isAtBottom = isAtBottom
+                    }
+                }
+            }
+            .defaultScrollAnchor(viewModel.isProcessingPagination ? nil : .bottom)
             .onAppear {
                 viewModel.markMessagesAsRead()
             }
-            .onChange(of: viewModel.messages.count) {
-                handleScrollForNewMessage(proxy: proxy)
-            }
-            .onChange(of: viewModel.translations) {
-                handleScrollForTranslation(proxy: proxy)
+            .onChange(of: viewModel.contentVersion) { _, _ in
+                handleStickyBottomScroll(proxy: proxy)
             }
             .onChange(of: isTextFieldFocused) { _, isFocused in
-                handleScrollForKeyboard(proxy: proxy, isFocused: isFocused)
+                if isFocused {
+                    handleStickyBottomScroll(proxy: proxy)
+                }
             }
-            .onChange(of: viewModel.autoTranslateEnabled) {
-                handleScrollForAutoTranslate(proxy: proxy)
+            .onChange(of: viewModel.showSmartReplies) { _, _ in
+                // Trigger sticky-bottom scroll when Smart Replies appear/disappear
+                handleStickyBottomScroll(proxy: proxy)
             }
         }
     }
@@ -85,9 +136,28 @@ struct ChatView: View {
                     }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
+                
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
+            // Smart Replies (PR #7) - Now properly positioned above input bar
+            if viewModel.showSmartReplies {
+                SmartReplyView(
+                    replies: viewModel.smartReplies,
+                    onSelect: { reply in
+                        viewModel.selectSmartReply(reply, into: &messageText)
+                    },
+                    onDismiss: {
+                        viewModel.dismissSmartReplies()
+                    }
+                )
+                .transition(.asymmetric(
+                    insertion: .move(edge: .bottom).combined(with: .opacity),
+                    removal: .move(edge: .bottom).combined(with: .opacity)
+                ))
+                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: viewModel.showSmartReplies)
+            }
+            
             // Input Bar
             HStack(alignment: .bottom, spacing: 12) {
                 TextField("Message", text: $messageText, axis: .vertical)
@@ -121,14 +191,27 @@ struct ChatView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button {
-                    viewModel.autoTranslateEnabled.toggle()
-                    viewModel.saveAutoTranslateSetting() // Persist the setting
-                } label: {
-                    Image(systemName: "globe")
-                        .foregroundColor(viewModel.autoTranslateEnabled ? .blue : .gray)
-                        .symbolVariant(viewModel.autoTranslateEnabled ? .fill : .none)
-                        .font(.system(size: 20, weight: viewModel.autoTranslateEnabled ? .bold : .regular))
+                HStack(spacing: 16) {
+                    // AI Assistant Button (PR #8) - Moved to header
+                    Button(action: {
+                        showingAIAssistant = true
+                    }) {
+                        Image(systemName: "sparkles")
+                            .foregroundColor(.purple)
+                            .symbolVariant(.fill)
+                            .font(.system(size: 20, weight: .semibold))
+                    }
+                    
+                    // Auto-translate Toggle
+                    Button {
+                        viewModel.autoTranslateEnabled.toggle()
+                        viewModel.saveAutoTranslateSetting() // Persist the setting
+                    } label: {
+                        Image(systemName: "globe")
+                            .foregroundColor(viewModel.autoTranslateEnabled ? .blue : .gray)
+                            .symbolVariant(viewModel.autoTranslateEnabled ? .fill : .none)
+                            .font(.system(size: 20, weight: viewModel.autoTranslateEnabled ? .bold : .regular))
+                    }
                 }
             }
         }
@@ -141,6 +224,30 @@ struct ChatView: View {
             viewModel.cleanup()
             // Clear active conversation when leaving chat
             NotificationService.shared.activeConversationId = nil
+        }
+        .sheet(isPresented: $viewModel.showingFormalitySheet) {
+            if let message = viewModel.selectedMessageForFormality,
+               let analysis = viewModel.formalityAnalyses[message.id] {
+                FormalityDetailSheet(
+                    message: message,
+                    analysis: analysis,
+                    viewModel: viewModel
+                )
+            }
+        }
+        .sheet(isPresented: $viewModel.showingPhraseExplanationSheet) {
+            if let phrase = viewModel.selectedPhraseForExplanation {
+                PhraseExplanationSheet(
+                    phrase: phrase,
+                    fullExplanation: viewModel.currentExplanation,
+                    isLoading: viewModel.loadingExplanation
+                )
+            }
+        }
+        .sheet(isPresented: $showingAIAssistant) {
+            NavigationStack {
+                AIAssistantView(conversationId: conversationId)
+            }
         }
     }
 
@@ -155,48 +262,14 @@ struct ChatView: View {
     }
     
     // MARK: - Scroll Helpers
-    private func handleScrollForNewMessage(proxy: ScrollViewProxy) {
+    private func handleStickyBottomScroll(proxy: ScrollViewProxy) {
+        // Only scroll if user is at/near bottom
+        guard viewModel.isAtBottom else { return }
         guard !viewModel.messages.isEmpty else { return }
-        if let lastMessage = viewModel.messages.last {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                withAnimation(.easeOut(duration: 0.25)) {
-                    proxy.scrollTo(lastMessage.id, anchor: .bottom)
-                }
-            }
-        }
-    }
-    
-    private func handleScrollForTranslation(proxy: ScrollViewProxy) {
-        // When a translation appears, the message bubble expands
-        // Scroll to keep the translated message visible
-        // Find the most recently translated message (highest index with translation)
-        if let lastTranslatedMessage = viewModel.messages.last(where: { viewModel.translations[$0.id] != nil }) {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                withAnimation(.easeOut(duration: 0.3)) {
-                    proxy.scrollTo(lastTranslatedMessage.id, anchor: .center)
-                }
-            }
-        }
-    }
-    
-    private func handleScrollForKeyboard(proxy: ScrollViewProxy, isFocused: Bool) {
-        if isFocused, let lastMessage = viewModel.messages.last {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                withAnimation(.easeOut(duration: 0.25)) {
-                    proxy.scrollTo(lastMessage.id, anchor: .bottom)
-                }
-            }
-        }
-    }
-    
-    private func handleScrollForAutoTranslate(proxy: ScrollViewProxy) {
-        // When auto-translate is toggled, translations appear/disappear
-        // Only scroll to bottom if we're already near the bottom
-        // This prevents jarring scroll jumps when user is reading older messages
         guard let lastMessage = viewModel.messages.last else { return }
         
-        // Small delay to let the view update with new translation visibility
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+        // Delay to allow view to update with new content
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             withAnimation(.easeOut(duration: 0.25)) {
                 proxy.scrollTo(lastMessage.id, anchor: .bottom)
             }
@@ -204,272 +277,15 @@ struct ChatView: View {
     }
 }
 
-struct MessageBubble: View {
-    let message: Message
-    let isFromCurrentUser: Bool
-    let senderDetails: (name: String, initials: String, color: String, photoURL: String?)?
-    let totalParticipants: Int
-    @ObservedObject var viewModel: ChatViewModel
-    
-    @State private var showTranslation = false
-
-    // Check if message has been read by someone OTHER than the sender
-    private var isReadByOthers: Bool {
-        // For direct chat (2 people): read if readBy contains more than just the sender
-        if totalParticipants == 2 {
-            return message.readBy.count >= 2
-        }
-        // For group chat: read if anyone besides sender has read it
-        return message.readBy.count > 1
-    }
-
-    private var othersReadCount: Int {
-        // Exclude the sender from the count
-        return max(0, message.readBy.count - 1)
-    }
-
-    var body: some View {
-        HStack(alignment: .bottom, spacing: 8) {
-            // Avatar for received messages
-            if !isFromCurrentUser {
-                if let details = senderDetails {
-                    // Try to display profile photo, fall back to colored circle
-                    // Validate URL: must be http(s) and not a color hex
-                    if let photoURL = details.photoURL, 
-                       !photoURL.isEmpty,
-                       !photoURL.hasPrefix("#"),
-                       photoURL.hasPrefix("http") {
-                        AsyncImage(url: URL(string: photoURL)) { phase in
-                            switch phase {
-                            case .success(let image):
-                                image
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 32, height: 32)
-                                    .clipShape(Circle())
-                            case .failure, .empty:
-                                defaultAvatarCircle(details: details)
-                            @unknown default:
-                                defaultAvatarCircle(details: details)
-                            }
-                        }
-                    } else {
-                        defaultAvatarCircle(details: details)
-                    }
-                } else {
-                    Circle()
-                        .fill(Color.gray)
-                        .frame(width: 32, height: 32)
-                        .overlay {
-                            Text("?")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundColor(.white)
-                        }
-                }
-            }
-
-            if isFromCurrentUser {
-                Spacer(minLength: 50)
-            }
-
-            VStack(alignment: isFromCurrentUser ? .trailing : .leading, spacing: 4) {
-                if let text = message.text {
-                    VStack(alignment: isFromCurrentUser ? .trailing : .leading, spacing: 8) {
-                        // Original message text
-                        Text(text)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
-                            .background(isFromCurrentUser ? Color.messagePrimary : Color.messageReceived)
-                            .foregroundColor(isFromCurrentUser ? .white : .primary)
-                            .cornerRadius(18)
-                            .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
-                        
-                        // Translation badge and content (PR #2)
-                        // Only show translate button if message is in non-fluent language
-                        if !isFromCurrentUser && viewModel.shouldShowTranslateButton(for: message) {
-                            Button(action: {
-                                showTranslation.toggle()
-                                if showTranslation && viewModel.translations[message.id] == nil {
-                                    // Use first fluent language, fallback to English
-                                    let targetLang = viewModel.userFluentLanguages.first ?? "en"
-                                    viewModel.toggleTranslation(messageId: message.id, targetLanguage: targetLang)
-                                }
-                            }) {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "globe")
-                                        .font(.caption2)
-                                    Text(showTranslation ? "Hide translation" : "Tap to translate")
-                                        .font(.caption2)
-                                }
-                                .foregroundColor(.blue)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(Color.blue.opacity(0.1))
-                                .cornerRadius(8)
-                            }
-                            
-                            // Show translation if toggled on OR auto-translated
-                            if showTranslation || (viewModel.translations[message.id] != nil && viewModel.autoTranslateEnabled) {
-                                if viewModel.isTranslating[message.id] == true {
-                                    HStack(spacing: 8) {
-                                        ProgressView()
-                                            .scaleEffect(0.8)
-                                        Text("Translating...")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                    }
-                                    .padding(8)
-                                } else if let translation = viewModel.translations[message.id] {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(translation.translatedText)
-                                            .font(.body)
-                                            .padding(.horizontal, 12)
-                                            .padding(.vertical, 8)
-                                            .background(Color(.systemGray6))
-                                            .cornerRadius(12)
-                                        
-                                        Text("Translated from \(languageName(translation.originalLanguage))")
-                                            .font(.caption2)
-                                            .foregroundColor(.secondary)
-                                            .padding(.horizontal, 4)
-                                    }
-                                } else if viewModel.translationErrors[message.id] != nil {
-                                    Text("Translation failed")
-                                        .font(.caption)
-                                        .foregroundColor(.red)
-                                        .padding(8)
-                                }
-                            }
-                            
-                            // Cultural Context Hint (PR #3)
-                            if let culturalContext = viewModel.culturalContexts[message.id],
-                               viewModel.culturalHintsEnabled, // Check if user has cultural hints enabled
-                               (showTranslation || (viewModel.translations[message.id] != nil && viewModel.autoTranslateEnabled)), // Only show when translation is visible
-                               culturalContext.hasContext,
-                               !viewModel.dismissedHints.contains(message.id) {
-                                CulturalContextCard(
-                                    context: culturalContext,
-                                    onDismiss: {
-                                        viewModel.dismissCulturalHint(messageId: message.id)
-                                    }
-                                )
-                            }
-                        }
-                    }
-                }
-
-                HStack(spacing: 4) {
-                    Text(message.timestamp, style: .time)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-
-                    if isFromCurrentUser {
-                        // Show read receipt information
-                        if isReadByOthers {
-                            if totalParticipants > 2 {
-                                // Group chat: show read count (excluding sender)
-                                Text("Read by \(othersReadCount)")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                            } else {
-                                // Direct chat: show "Read"
-                                Text("Read")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                            }
-                        } else {
-                            // Show status icon for other states
-                            Image(systemName: statusIcon)
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                }
-                .padding(.horizontal, 4)
-            }
-
-            if !isFromCurrentUser {
-                Spacer(minLength: 50)
-            }
-        }
-    }
-
-    private var statusIcon: String {
-        switch message.status {
-        case .sending:
-            return "clock"
-        case .sent:
-            return "checkmark"
-        case .delivered:
-            return "checkmark.circle"
-        case .read:
-            return "checkmark.circle.fill"
-        case .failed:
-            return "exclamationmark.circle"
-        }
-    }
-    
-    // Helper to convert language code to readable name (PR #2)
-    private func languageName(_ code: String) -> String {
-        let locale = Locale.current
-        return locale.localizedString(forLanguageCode: code) ?? code.uppercased()
-    }
-    
-    // Helper to create default colored circle avatar with initials
-    private func defaultAvatarCircle(details: (name: String, initials: String, color: String, photoURL: String?)) -> some View {
-        Circle()
-            .fill(Color(hex: details.color))
-            .frame(width: 32, height: 32)
-            .overlay {
-                Text(details.initials)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white)
-            }
+// Add preference key for scroll tracking
+struct ScrollOffsetPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
 
-// MARK: - Cultural Context Card (PR #3)
-
-struct CulturalContextCard: View {
-    let context: CulturalContext
-    let onDismiss: () -> Void
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: "lightbulb.fill")
-                    .font(.caption)
-                    .foregroundColor(.yellow)
-                
-                Text("Cultural Context")
-                    .font(.caption.bold())
-                    .foregroundColor(.primary)
-                
-                Spacer()
-                
-                Button(action: onDismiss) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-            
-            if let explanation = context.explanation {
-                Text(explanation)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(12)
-        .background(Color.yellow.opacity(0.1))
-        .cornerRadius(12)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.yellow.opacity(0.3), lineWidth: 1)
-        )
-    }
-}
+// MessageBubble and CulturalContextCard extracted to MessageBubbleView.swift
 
 #Preview {
     NavigationStack {

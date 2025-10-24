@@ -160,10 +160,37 @@ struct ProfileView: View {
                                 Text("Cultural Context Hints")
                             }
                         }
+                        
+                        Toggle(isOn: $viewModel.autoAnalyzeFormality) {
+                            HStack {
+                                Image(systemName: "person.2.badge.gearshape")
+                                    .foregroundColor(.blue)
+                                    .frame(width: 24)
+                                Text("Auto-Analyze Formality")
+                            }
+                        }
+                        
+                        Toggle(isOn: $viewModel.autoDetectSlang) {
+                            HStack {
+                                Image(systemName: "text.bubble")
+                                    .foregroundColor(.purple)
+                                    .frame(width: 24)
+                                Text("Auto-Detect Slang & Idioms")
+                            }
+                        }
+                        
+                        Toggle(isOn: $viewModel.autoGenerateSmartReplies) {
+                            HStack {
+                                Image(systemName: "sparkles")
+                                    .foregroundColor(.purple)
+                                    .frame(width: 24)
+                                Text("Smart Reply Suggestions")
+                            }
+                        }
                     } header: {
                         Text("AI & Translation")
                     } footer: {
-                        Text("Select languages you're fluent in to enable smart translation features.")
+                        Text("Enable automatic slang detection and smart reply suggestions that match your writing style.")
                     }
                     
                     // Actions

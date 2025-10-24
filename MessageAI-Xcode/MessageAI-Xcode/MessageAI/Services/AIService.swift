@@ -4,7 +4,8 @@
  */
 
 import Foundation
-import FirebaseFunctions
+@preconcurrency import FirebaseFunctions
+import FirebaseAuth
 
 @MainActor
 class AIService: ObservableObject {
@@ -168,11 +169,127 @@ class AIService: ObservableObject {
         throw AIError.notImplemented
     }
     
+    // MARK: - Formality Analysis (PR #4)
+    
+    /**
+     * Analyze formality level of message
+     */
+    func analyzeFormalityAnalysis(
+        messageId: String,
+        text: String,
+        language: String
+    ) async throws -> FormalityAnalysis {
+        let data: [String: Any] = [
+            "messageId": messageId,
+            "text": text,
+            "language": language
+        ]
+        
+        return try await withCheckedThrowingContinuation { continuation in
+            let callable = functions.httpsCallable("analyzeMessageFormality")
+            callable.call(data) { result, error in
+                if let error = error {
+                    continuation.resume(throwing: self.mapError(error))
+                    return
+                }
+                
+                guard let result = result,
+                      let response = result.data as? [String: Any] else {
+                    continuation.resume(throwing: AIError.invalidResponse)
+                    return
+                }
+                
+                do {
+                    let jsonData = try JSONSerialization.data(withJSONObject: response)
+                    let analysis = try JSONDecoder().decode(FormalityAnalysis.self, from: jsonData)
+                    continuation.resume(returning: analysis)
+                } catch {
+                    print("Failed to decode formality analysis: \(error)")
+                    continuation.resume(throwing: AIError.invalidResponse)
+                }
+            }
+        }
+    }
+    
+    /**
+     * Adjust message formality to target level
+     */
+    func adjustFormality(
+        text: String,
+        currentLevel: FormalityLevel?,
+        targetLevel: FormalityLevel,
+        language: String
+    ) async throws -> FormalityAdjustment {
+        var data: [String: Any] = [
+            "text": text,
+            "targetLevel": targetLevel.rawValue,
+            "language": language
+        ]
+        
+        if let currentLevel = currentLevel {
+            data["currentLevel"] = currentLevel.rawValue
+        }
+        
+        return try await withCheckedThrowingContinuation { continuation in
+            let callable = functions.httpsCallable("adjustMessageFormality")
+            callable.call(data) { result, error in
+                if let error = error {
+                    continuation.resume(throwing: self.mapError(error))
+                    return
+                }
+                
+                guard let result = result,
+                      let response = result.data as? [String: Any] else {
+                    continuation.resume(throwing: AIError.invalidResponse)
+                    return
+                }
+                
+                do {
+                    let jsonData = try JSONSerialization.data(withJSONObject: response)
+                    let adjustment = try JSONDecoder().decode(FormalityAdjustment.self, from: jsonData)
+                    continuation.resume(returning: adjustment)
+                } catch {
+                    print("Failed to decode formality adjustment: \(error)")
+                    continuation.resume(throwing: AIError.invalidResponse)
+                }
+            }
+        }
+    }
+    
     /**
      * Detect slang and idioms in text (PR #5)
      */
     func detectSlangIdioms(text: String, language: String) async throws -> [DetectedPhrase] {
-        throw AIError.notImplemented
+        let data: [String: Any] = [
+            "text": text,
+            "language": language
+        ]
+        
+        return try await withCheckedThrowingContinuation { continuation in
+            let callable = functions.httpsCallable("detectSlangIdioms")
+            callable.call(data) { result, error in
+                if let error = error {
+                    continuation.resume(throwing: self.mapError(error))
+                    return
+                }
+                
+                guard let result = result,
+                      let response = result.data as? [String: Any],
+                      let phrasesData = response["phrases"] as? [[String: Any]] else {
+                    continuation.resume(throwing: AIError.invalidResponse)
+                    return
+                }
+                
+                do {
+                    let jsonData = try JSONSerialization.data(withJSONObject: phrasesData)
+                    let phrases = try JSONDecoder().decode([DetectedPhrase].self, from: jsonData)
+                    continuation.resume(returning: phrases)
+                } catch {
+                    print("Failed to decode detected phrases: \(error)")
+                    continuation.resume(throwing: AIError.invalidResponse)
+                }
+            }
+        }
     }
     
     /**
@@ -183,7 +300,39 @@ class AIService: ObservableObject {
         language: String,
         context: String?
     ) async throws -> PhraseExplanation {
-        throw AIError.notImplemented
+        var data: [String: Any] = [
+            "phrase": phrase,
+            "language": language
+        ]
+        
+        if let context = context {
+            data["context"] = context
+        }
+        
+        return try await withCheckedThrowingContinuation { continuation in
+            let callable = functions.httpsCallable("explainPhrase")
+            callable.call(data) { result, error in
+                if let error = error {
+                    continuation.resume(throwing: self.mapError(error))
+                    return
+                }
+                
+                guard let result = result,
+                      let response = result.data as? [String: Any] else {
+                    continuation.resume(throwing: AIError.invalidResponse)
+                    return
+                }
+                
+                do {
+                    let jsonData = try JSONSerialization.data(withJSONObject: response)
+                    let explanation = try JSONDecoder().decode(PhraseExplanation.self, from: jsonData)
+                    continuation.resume(returning: explanation)
+                } catch {
+                    print("Failed to decode phrase explanation: \(error)")
+                    continuation.resume(throwing: AIError.invalidResponse)
+                }
+            }
+        }
     }
     
     /**
@@ -205,7 +354,40 @@ class AIService: ObservableObject {
         conversationId: String?,
         limit: Int = 10
     ) async throws -> [SearchResult] {
-        throw AIError.notImplemented
+        var data: [String: Any] = [
+            "query": query,
+            "limit": limit
+        ]
+        
+        if let conversationId = conversationId {
+            data["conversationId"] = conversationId
+        }
+        
+        return try await withCheckedThrowingContinuation { continuation in
+            let callable = functions.httpsCallable("semanticSearch")
+            callable.call(data) { result, error in
+                if let error = error {
+                    continuation.resume(throwing: self.mapError(error))
+                    return
+                }
+                
+                guard let result = result,
+                      let response = result.data as? [String: Any],
+                      let resultsData = response["results"] as? [[String: Any]] else {
+                    continuation.resume(throwing: AIError.invalidResponse)
+                    return
+                }
+                
+                do {
+                    let jsonData = try JSONSerialization.data(withJSONObject: resultsData)
+                    let searchResults = try JSONDecoder().decode([SearchResult].self, from: jsonData)
+                    continuation.resume(returning: searchResults)
+                } catch {
+                    print("Failed to decode search results: \(error)")
+                    continuation.resume(throwing: AIError.invalidResponse)
+                }
+            }
+        }
     }
     
     /**
@@ -213,9 +395,107 @@ class AIService: ObservableObject {
      */
     func queryAIAssistant(
         query: String,
-        userId: String
+        conversationId: String? = nil
+    ) async throws -> (response: String, sources: [String]) {
+        let callable = functions.httpsCallable("queryAIAssistant")
+        
+        let data: [String: Any] = [
+            "query": query,
+            "userId": Auth.auth().currentUser?.uid ?? "",
+            "conversationId": conversationId as Any
+        ]
+        
+        do {
+            let result = try await callable.call(data)
+            
+            guard let resultData = result.data as? [String: Any],
+                  let response = resultData["response"] as? String else {
+                throw AIError.invalidResponse
+            }
+            
+            let sources = resultData["sources"] as? [String] ?? []
+            
+            print("✅ AI Assistant response received (sources: \(sources.count))")
+            return (response, sources)
+            
+        } catch {
+            print("❌ AI Assistant query failed: \(error.localizedDescription)")
+            throw mapError(error)
+        }
+    }
+    
+    /**
+     * Summarize conversation (PR #8)
+     */
+    func summarizeConversation(
+        conversationId: String
     ) async throws -> String {
-        throw AIError.notImplemented
+        let callable = functions.httpsCallable("summarizeConversation")
+        
+        let data: [String: Any] = [
+            "conversationId": conversationId,
+            "userId": Auth.auth().currentUser?.uid ?? ""
+        ]
+        
+        do {
+            let result = try await callable.call(data)
+            
+            guard let resultData = result.data as? [String: Any],
+                  let summary = resultData["summary"] as? String else {
+                throw AIError.invalidResponse
+            }
+            
+            print("✅ Conversation summary generated")
+            return summary
+            
+        } catch {
+            print("❌ Conversation summary failed: \(error.localizedDescription)")
+            throw mapError(error)
+        }
+    }
+    
+    /**
+     * Generate smart replies for a message (PR #7)
+     */
+    func generateSmartReplies(
+        conversationId: String,
+        incomingMessageId: String
+    ) async throws -> [SmartReply] {
+        let callable = functions.httpsCallable("generateSmartReplies")
+        
+        let data: [String: Any] = [
+            "conversationId": conversationId,
+            "incomingMessageId": incomingMessageId,
+            "userId": Auth.auth().currentUser?.uid ?? ""
+        ]
+        
+        do {
+            let result = try await callable.call(data)
+            
+            guard let resultData = result.data as? [String: Any],
+                  let repliesArray = resultData["replies"] as? [[String: Any]] else {
+                throw AIError.invalidResponse
+            }
+            
+            let replies = try repliesArray.map { replyDict -> SmartReply in
+                guard let text = replyDict["text"] as? String else {
+                    throw AIError.invalidResponse
+                }
+                
+                return SmartReply(
+                    text: text,
+                    translation: replyDict["translation"] as? String,
+                    formality: replyDict["formality"] as? String
+                )
+            }
+            
+            print("✅ Generated \(replies.count) smart replies")
+            return replies
+            
+        } catch {
+            print("❌ Smart replies generation failed: \(error.localizedDescription)")
+            throw mapError(error)
+        }
     }
     
     /**

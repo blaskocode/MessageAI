@@ -101,12 +101,49 @@ enum FormalityLevel: String, Codable {
         case .veryCasual: return "🤙"
         }
     }
+    
+    var icon: String {
+        switch self {
+        case .veryFormal: return "person.2.badge.gearshape"
+        case .formal: return "suit.diamond.fill"
+        case .neutral: return "bubble.middle.top"
+        case .casual: return "figure.wave"
+        case .veryCasual: return "hand.wave.fill"
+        }
+    }
 }
 
-struct FormalityAnalysis: Codable {
-    let formality: FormalityLevel
+enum MarkerType: String, Codable {
+    case pronoun = "pronoun"
+    case verbForm = "verb_form"
+    case honorific = "honorific"
+    case vocabulary = "vocabulary"
+    case grammar = "grammar"
+    case contraction = "contraction"
+}
+
+struct FormalityMarker: Codable, Equatable {
+    let text: String
+    let type: MarkerType
+    let position: Int
     let explanation: String
-    let markers: [String]  // Specific words/phrases indicating formality
+}
+
+struct FormalityAnalysis: Codable, Equatable {
+    let level: FormalityLevel
+    let confidence: Double
+    let markers: [FormalityMarker]
+    let explanation: String
+    let suggestedLevel: FormalityLevel?
+}
+
+struct FormalityAdjustment: Codable {
+    let originalText: String
+    let adjustedText: String
+    let originalLevel: FormalityLevel
+    let targetLevel: FormalityLevel
+    let language: String
+    let changesExplanation: String
 }
 
 // MARK: - Slang & Idioms (PR #5)
@@ -146,7 +183,10 @@ struct DetectedPhrase: Codable, Identifiable {
 
 struct PhraseExplanation: Codable {
     let phrase: String
-    let explanation: String
+    let meaning: String
+    let origin: String
+    let examples: [String]
+    let culturalNotes: String
 }
 
 // MARK: - Smart Replies (PR #7)

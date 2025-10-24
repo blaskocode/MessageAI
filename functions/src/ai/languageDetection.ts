@@ -91,7 +91,7 @@ Common codes: en (English), es (Spanish), fr (French), de (German), it (Italian)
 ja (Japanese), zh (Chinese), ko (Korean), ar (Arabic), ru (Russian), hi (Hindi)`;
 
   const response = await callOpenAI({
-    model: 'gpt-4-turbo-preview',
+    model: 'gpt-4o-mini',
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: `Detect the language of this text:\n\n"${text}"` },

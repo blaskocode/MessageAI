@@ -92,7 +92,7 @@ Be selective - only flag truly significant cultural differences that affect mean
 
       // Call OpenAI using helper (with retry logic and better error handling)
       const resultText = await callOpenAI({
-        model: 'gpt-4-turbo-preview',
+        model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },

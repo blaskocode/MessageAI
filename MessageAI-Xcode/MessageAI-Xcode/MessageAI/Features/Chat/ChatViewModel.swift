@@ -17,11 +17,55 @@ class ChatViewModel: ObservableObject {
     @Published var conversationTitle: String = "Chat"
     @Published var senderDetails: [String: (name: String, initials: String, color: String, photoURL: String?)] = [:]
     
+    // Sticky-bottom scroll tracking
+    @Published var contentVersion: Int = 0
+    @Published var isAtBottom: Bool = true // Track if user is at bottom
+    
     // User's fluent languages for translation filtering (PR #2)
     @Published var userFluentLanguages: [String] = ["en"] // Default to English
     
     // User's cultural hints preference (PR #3)
     @Published var culturalHintsEnabled: Bool = true // Default to enabled
+    
+    // Formality analysis cache (PR #4)
+    @Published var formalityAnalyses: [String: FormalityAnalysis] = [:]
+    @Published var adjustedVersions: [String: [FormalityLevel: String]] = [:]
+    @Published var showingFormalitySheet: Bool = false
+    @Published var selectedMessageForFormality: Message?
+    
+    // Auto-analyze formality setting (reads from UserDefaults, set in ProfileView)
+    var autoAnalyzeFormality: Bool {
+        UserDefaults.standard.bool(forKey: "autoAnalyzeFormality")
+    }
+    
+    // Slang & idiom detection cache (PR #5)
+    @Published var slangDetections: [String: [DetectedPhrase]] = [:]
+    @Published var phraseExplanations: [String: PhraseExplanation] = [:]
+    @Published var showingPhraseExplanationSheet: Bool = false
+    @Published var selectedPhraseForExplanation: DetectedPhrase?
+    @Published var currentExplanation: PhraseExplanation?
+    @Published var loadingExplanation: Bool = false
+    
+    // Auto-detect slang setting (reads from UserDefaults, set in ProfileView)
+    var autoDetectSlang: Bool {
+        UserDefaults.standard.bool(forKey: "autoDetectSlang")
+    }
+    
+    // Smart replies (PR #7)
+    @Published var smartReplies: [SmartReply] = []
+    @Published var showSmartReplies: Bool = false
+    @Published var isGeneratingReplies: Bool = false
+    @Published var lastIncomingMessageId: String?
+    
+    // Auto-generate smart replies setting (default to true for new users)
+    var autoGenerateSmartReplies: Bool {
+        // Check if key exists
+        if UserDefaults.standard.object(forKey: "autoGenerateSmartReplies") == nil {
+            // First time - default to true
+            return true
+        }
+        return UserDefaults.standard.bool(forKey: "autoGenerateSmartReplies")
+    }
 
     let conversationId: String
     var currentUserId: String? {
@@ -30,14 +74,31 @@ class ChatViewModel: ObservableObject {
 
     let firebaseService = FirebaseService.shared
     let notificationService = NotificationService.shared
+    let aiService = AIService.shared
     private nonisolated(unsafe) var messageListener: ListenerRegistration?
     private nonisolated(unsafe) var typingListener: ListenerRegistration?
+    private nonisolated(unsafe) var newMessageListener: ListenerRegistration?
 
     // Track previously seen message IDs to detect new messages
     private var previousMessageIds: Set<String> = []
 
     // Track if this is the initial load (don't notify on first load)
-    private var isInitialLoad = true
+    @Published var isInitialLoad = true
+    
+    // Pagination
+    private var lastLoadedMessage: DocumentSnapshot?
+    private let pageSize = 50
+    @Published var canLoadMore = true
+    @Published var isLoadingMore = false
+    @Published var paginationError: String?
+    @Published var isPaginationTriggered = false
+    private var paginationRetryCount = 0
+    
+    // Track if we're currently processing paginated messages (to prevent scroll jumps)
+    @Published var isProcessingPagination = false
+    
+    // Separate array for paginated messages to avoid triggering scroll anchor
+    @Published var paginatedMessages: [Message] = []
 
     // Cache conversation details for notifications
     private var conversationType: String?
@@ -169,31 +230,85 @@ class ChatViewModel: ObservableObject {
 
     func loadMessages() {
         guard let userId = currentUserId else { return }
-
+        
         isLoading = true
-
-        messageListener = firebaseService.fetchMessages(conversationId: conversationId) { [weak self] documents in
-            self?.isLoading = false
-            self?.parseMessages(documents)
+        
+        // Load most recent 50 messages with real-time listener
+        messageListener = firebaseService.fetchRecentMessages(
+            conversationId: conversationId,
+            limit: pageSize
+        ) { [weak self] documents in
+            guard let self = self else { return }
+            self.lastLoadedMessage = documents.first // For pagination cursor
+            self.parseMessages(documents, isPagination: false)
+            self.canLoadMore = documents.count == self.pageSize
+            self.isLoading = false
         }
-
-        // Listen for typing status
-        typingListener = firebaseService.observeTypingStatus(conversationId: conversationId, currentUserId: userId) { [weak self] isTyping in
+        
+        // Listen for typing status (unchanged)
+        typingListener = firebaseService.observeTypingStatus(
+            conversationId: conversationId,
+            currentUserId: userId
+        ) { [weak self] isTyping in
             Task { @MainActor in
                 self?.isTyping = isTyping
             }
         }
-
+        
         // Mark messages as read
         Task {
             try? await markMessagesAsRead(userId: userId)
         }
     }
 
-    private func parseMessages(_ documents: [DocumentSnapshot]) {
+    func loadMoreMessages() async {
+        guard !isLoadingMore, canLoadMore else { return }
+        guard let lastMessage = lastLoadedMessage else { return }
+        
+        isLoadingMore = true
+        isProcessingPagination = true
+        paginationError = nil
+        
+        do {
+            let olderMessages = try await firebaseService.fetchMessagesBefore(
+                conversationId: conversationId,
+                before: lastMessage,
+                limit: pageSize
+            )
+            
+            lastLoadedMessage = olderMessages.first
+            canLoadMore = olderMessages.count == pageSize
+            
+            // Parse with pagination flag (enables AI but skips Smart Replies)
+            parseMessages(olderMessages, isPagination: true)
+            
+            paginationRetryCount = 0 // Reset on success
+            print("✅ Loaded \(olderMessages.count) older messages")
+            
+        } catch {
+            paginationRetryCount += 1
+            
+            if paginationRetryCount < 2 {
+                // Auto-retry once
+                print("⚠️ Pagination failed, retrying... (attempt \(paginationRetryCount + 1))")
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s delay
+                await loadMoreMessages()
+                return
+            } else {
+                // After 2 failures, show inline error
+                paginationError = "Couldn't load messages. Tap to retry"
+                print("❌ Pagination failed after 2 retries")
+            }
+        }
+        
+        isLoadingMore = false
+        isProcessingPagination = false
+    }
+
+    private func parseMessages(_ documents: [DocumentSnapshot], isPagination: Bool = false) {
         guard let currentUserId = currentUserId else { return }
         
-        messages = documents.compactMap { doc -> Message? in
+        let newMessages = documents.compactMap { doc -> Message? in
             let data = doc.data()
 
             guard let id = data?["messageId"] as? String,
@@ -225,46 +340,75 @@ class ChatViewModel: ObservableObject {
                 detectedLanguage: detectedLanguage
             )
 
-            // Check if this is a new message (not in previous set)
-            let isNewMessage = !previousMessageIds.contains(id)
-            let isFromOtherUser = senderId != currentUserId
-            let hasText = text != nil && !text!.isEmpty
-            let shouldNotify = !isInitialLoad && isNewMessage && isFromOtherUser && hasText
-            
-            // Trigger language detection for new messages if not already detected (PR #2)
-            if isNewMessage && hasText && detectedLanguage == nil {
-                Task {
-                    await self.detectAndUpdateLanguage(messageId: id, text: text!)
+            // AI Features: Always allow (check cache first), but skip Smart Replies for old messages
+            if !isPagination || !isInitialLoad {
+                let isNewMessage = !previousMessageIds.contains(id)
+                let isFromOtherUser = senderId != currentUserId
+                let hasText = text != nil && !text!.isEmpty
+                let shouldNotify = !isInitialLoad && isNewMessage && isFromOtherUser && hasText
+                
+                // Trigger language detection for new messages if not already detected (PR #2)
+                if isNewMessage && hasText && detectedLanguage == nil {
+                    Task {
+                        await self.detectAndUpdateLanguage(messageId: id, text: text!)
+                    }
                 }
-            }
-            
-            // Check auto-translate for new incoming messages (PR #3)
-            if !isInitialLoad && isNewMessage && isFromOtherUser && hasText {
-                Task {
-                    await self.checkAutoTranslate(for: message)
+                
+                // Check auto-translate for new incoming messages (PR #3)
+                if !isInitialLoad && isNewMessage && isFromOtherUser && hasText {
+                    Task {
+                        await self.checkAutoTranslate(for: message)
+                    }
                 }
-            }
+                
+                // Analyze formality for new incoming messages (PR #4)
+                if isNewMessage && isFromOtherUser && hasText {
+                    Task {
+                        await self.analyzeFormalityIfNeeded(for: message)
+                    }
+                }
+                
+                // Detect slang/idioms for new incoming messages (PR #5)
+                if isNewMessage && isFromOtherUser && hasText {
+                    Task {
+                        await self.detectSlangIfNeeded(for: message)
+                    }
+                }
+                
+                // Smart Replies ONLY for new incoming messages (not paginated)
+                if isNewMessage && !isPagination && isFromOtherUser && hasText {
+                    Task {
+                        await self.generateSmartRepliesIfNeeded(for: message)
+                    }
+                }
 
-            // Trigger notification for new messages from other users (but not on initial load)
-            if shouldNotify {
-                triggerNotificationForMessage(message: message, senderId: senderId)
-            }
-            
-            // Automatically mark new incoming messages as read (since user is viewing the chat)
-            if !isInitialLoad && isNewMessage && isFromOtherUser && !readBy.contains(currentUserId) {
-                markMessageAsRead(messageId: id)
+                // Trigger notification for new messages from other users (but not on initial load)
+                if shouldNotify {
+                    triggerNotificationForMessage(message: message, senderId: senderId)
+                }
+                
+                // Automatically mark new incoming messages as read (since user is viewing the chat)
+                if !isInitialLoad && isNewMessage && isFromOtherUser && !readBy.contains(currentUserId) {
+                    markMessageAsRead(messageId: id)
+                }
             }
 
             return message
         }
-        .sorted { $0.timestamp < $1.timestamp }
-
-        // Update previous message IDs for next comparison
-        previousMessageIds = Set(messages.map { $0.id })
-
-        // Mark initial load as complete
-        if isInitialLoad {
-            isInitialLoad = false
+        
+        if isPagination {
+            // Insert older messages at the beginning (preserves scroll position)
+            messages.insert(contentsOf: newMessages, at: 0)
+        } else {
+            // Normal real-time updates
+            messages = newMessages.sorted { $0.timestamp < $1.timestamp }
+            previousMessageIds = Set(messages.map { $0.id })
+            
+            if isInitialLoad {
+                isInitialLoad = false
+            }
+            
+            contentVersion += 1 // Trigger sticky-bottom scroll
         }
     }
 
@@ -418,8 +562,6 @@ class ChatViewModel: ObservableObject {
     @Published var culturalContexts: [String: CulturalContext] = [:]
     @Published var dismissedHints: Set<String> = []
     
-    let aiService = AIService.shared
-    
     // Translation methods moved to ChatViewModel+Translation.swift extension
 
     // MARK: - Cleanup
@@ -444,5 +586,73 @@ class ChatViewModel: ObservableObject {
         Task { @MainActor [weak self] in
             self?.cleanup()
         }
+    }
+    
+    // MARK: - Smart Replies (PR #7)
+    
+    /// Generate smart replies for the latest incoming message
+    func generateSmartRepliesIfNeeded(for message: Message) async {
+        print("🔍 [Smart Replies] Checking if should generate for message: \(message.id)")
+        
+        // Skip if auto-generate is disabled
+        guard autoGenerateSmartReplies else {
+            print("⏭️ [Smart Replies] Auto-generate disabled in settings")
+            return
+        }
+        
+        // Skip if message is from current user
+        guard message.senderId != currentUserId else {
+            print("⏭️ [Smart Replies] Message from current user, skipping")
+            return
+        }
+        
+        // Skip if we already generated for this message
+        guard lastIncomingMessageId != message.id else {
+            print("⏭️ [Smart Replies] Already generated for this message")
+            return
+        }
+        
+        // Skip if already generating
+        guard !isGeneratingReplies else {
+            print("⏭️ [Smart Replies] Already generating replies")
+            return
+        }
+        
+        print("🚀 [Smart Replies] Generating smart replies...")
+        lastIncomingMessageId = message.id
+        isGeneratingReplies = true
+        
+        do {
+            let replies = try await aiService.generateSmartReplies(
+                conversationId: conversationId,
+                incomingMessageId: message.id
+            )
+            
+            if !replies.isEmpty {
+                smartReplies = replies
+                showSmartReplies = true
+                print("✨ [Smart Replies] Generated \(replies.count) smart replies - SHOWING UI")
+            } else {
+                print("⚠️ [Smart Replies] Backend returned empty array")
+            }
+            
+        } catch {
+            print("❌ [Smart Replies] Failed to generate: \(error.localizedDescription)")
+        }
+        
+        isGeneratingReplies = false
+    }
+    
+    /// Insert selected smart reply into draft
+    func selectSmartReply(_ reply: SmartReply, into draftText: inout String) {
+        draftText = reply.text
+        showSmartReplies = false
+        print("📝 Inserted smart reply: \(reply.text)")
+    }
+    
+    /// Dismiss smart replies
+    func dismissSmartReplies() {
+        showSmartReplies = false
+        smartReplies = []
     }
 }

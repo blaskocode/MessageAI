@@ -24,12 +24,43 @@ class ProfileViewModel: ObservableObject {
     @Published var selectedLanguages: Set<String> = ["en"]
     @Published var culturalHintsEnabled: Bool = true
     
+    // Formality Settings (PR #4)
+    @Published var autoAnalyzeFormality: Bool {
+        didSet {
+            UserDefaults.standard.set(autoAnalyzeFormality, forKey: "autoAnalyzeFormality")
+        }
+    }
+    
+    // Slang & Idiom Settings (PR #5)
+    @Published var autoDetectSlang: Bool {
+        didSet {
+            UserDefaults.standard.set(autoDetectSlang, forKey: "autoDetectSlang")
+        }
+    }
+    
+    @Published var autoGenerateSmartReplies: Bool {
+        didSet {
+            UserDefaults.standard.set(autoGenerateSmartReplies, forKey: "autoGenerateSmartReplies")
+            print("💾 [Settings] Smart replies auto-generate saved: \(autoGenerateSmartReplies)")
+        }
+    }
+    
     private let db = Firestore.firestore()
     private var userId: String? {
         Auth.auth().currentUser?.uid
     }
     
     init() {
+        // Load formality auto-analyze setting from UserDefaults
+        self.autoAnalyzeFormality = UserDefaults.standard.bool(forKey: "autoAnalyzeFormality")
+        // Load slang auto-detect setting from UserDefaults
+        self.autoDetectSlang = UserDefaults.standard.bool(forKey: "autoDetectSlang")
+        self.autoGenerateSmartReplies = UserDefaults.standard.bool(forKey: "autoGenerateSmartReplies")
+        
+        print("🔧 [Settings] autoAnalyzeFormality: \(self.autoAnalyzeFormality)")
+        print("🔧 [Settings] autoDetectSlang: \(self.autoDetectSlang)")
+        print("🔧 [Settings] autoGenerateSmartReplies: \(self.autoGenerateSmartReplies)")
+        
         loadUserData()
     }
     

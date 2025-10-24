@@ -15,6 +15,15 @@ private class FirebaseConfigurator {
     static let shared = FirebaseConfigurator()
     
     private init() {
+        // Configure URL cache for profile images (50MB memory, 200MB disk)
+        let cache = URLCache(
+            memoryCapacity: 50_000_000,
+            diskCapacity: 200_000_000,
+            directory: FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)
+                .first?.appendingPathComponent("ProfileImageCache")
+        )
+        URLCache.shared = cache
+        
         FirebaseApp.configure()
         
         // CRITICAL: Enable offline persistence
@@ -23,6 +32,7 @@ private class FirebaseConfigurator {
         Firestore.firestore().settings = settings
         
         print("✅ Firebase configured with offline persistence enabled")
+        print("✅ URLCache configured for profile images (50MB memory, 200MB disk)")
     }
 }
 

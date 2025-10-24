@@ -196,6 +196,30 @@ class FirebaseService: ObservableObject {
         )
     }
     
+    func fetchRecentMessages(
+        conversationId: String,
+        limit: Int,
+        completion: @escaping ([DocumentSnapshot]) -> Void
+    ) -> ListenerRegistration {
+        return messageService.fetchRecentMessages(
+            conversationId: conversationId,
+            limit: limit,
+            completion: completion
+        )
+    }
+    
+    func fetchMessagesBefore(
+        conversationId: String,
+        before: DocumentSnapshot,
+        limit: Int
+    ) async throws -> [DocumentSnapshot] {
+        return try await messageService.fetchMessagesBefore(
+            conversationId: conversationId,
+            before: before,
+            limit: limit
+        )
+    }
+    
     func updateMessage(
         conversationId: String,
         messageId: String,

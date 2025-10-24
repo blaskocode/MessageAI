@@ -166,22 +166,24 @@ export { analyzeCulturalContext } from './ai/cultural';
 export { onUserProfileUpdated } from './triggers/userProfileUpdated';
 
 // Formality (PR #4)
-// export { analyzeFormality, adjustFormality } from './ai/formality';
+export { analyzeMessageFormality, adjustMessageFormality } from './ai/formality';
 
 // Slang & Idioms (PR #5)
-// export { detectSlangIdioms, explainPhrase } from './ai/slang';
+export { detectSlangIdioms, explainPhrase } from './ai/slang';
 
 // Embeddings & Search (PR #6)
-// export { generateEmbedding } from './ai/embeddings';
-// export { semanticSearch } from './ai/semanticSearch';
+export { onMessageCreated, generateMessageEmbedding } from './ai/embeddings';
+export { semanticSearch, getConversationContext } from './ai/semanticSearch';
 
 // Smart Replies (PR #7)
-// export { generateSmartReplies } from './ai/smartReplies';
-// export { analyzeWritingStyle } from './ai/styleAnalysis';
+export { generateSmartReplies } from './ai/smartReplies';
 
 // AI Assistant (PR #8)
-// export { queryAIAssistant } from './ai/assistant';
+export { queryAIAssistant, summarizeConversation } from './ai/assistant';
 
 // Structured Data (PR #9)
-// export { extractStructuredData } from './ai/structuredData';
+export { extractStructuredData, onMessageCreatedExtractData } from './ai/structuredData';
+
+// Admin Functions
+export { backfillEmbeddings } from './admin/backfillEmbeddings';
 
