@@ -49,7 +49,8 @@ extension ChatViewModel {
         do {
             let phrases = try await AIService.shared.detectSlangIdioms(
                 text: text,
-                language: language
+                language: language,
+                userFluentLanguage: userFluentLanguages.first
             )
             
             // Cache the result (even if empty)
@@ -101,7 +102,8 @@ extension ChatViewModel {
             let explanation = try await AIService.shared.explainPhrase(
                 phrase: phrase.phrase,
                 language: language,
-                context: context
+                context: context,
+                userFluentLanguage: userFluentLanguages.first
             )
             
             // Cache the explanation

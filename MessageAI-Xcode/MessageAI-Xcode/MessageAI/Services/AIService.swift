@@ -112,14 +112,21 @@ class AIService: ObservableObject {
      * Analyze cultural context in a message
      * Detects indirect communication, idioms, formality customs, time concepts
      */
-    func analyzeCulturalContext(text: String, sourceLanguage: String, targetLanguage: String) async throws -> CulturalContext {
+    func analyzeCulturalContext(text: String, sourceLanguage: String, targetLanguage: String, userFluentLanguage: String? = nil) async throws -> CulturalContext {
         return try await withCheckedThrowingContinuation { continuation in
             let function = functions.httpsCallable("analyzeCulturalContext")
-            function.call([
+            var data: [String: Any] = [
                 "text": text,
                 "sourceLanguage": sourceLanguage,
                 "targetLanguage": targetLanguage
-            ]) { result, error in
+            ]
+            
+            // Add user's fluent language if provided
+            if let userFluentLanguage = userFluentLanguage {
+                data["userFluentLanguage"] = userFluentLanguage
+            }
+            
+            function.call(data) { result, error in
                 if let error = error {
                     continuation.resume(throwing: self.mapError(error))
                     return
@@ -177,13 +184,19 @@ class AIService: ObservableObject {
     func analyzeFormalityAnalysis(
         messageId: String,
         text: String,
-        language: String
+        language: String,
+        userFluentLanguage: String? = nil
     ) async throws -> FormalityAnalysis {
-        let data: [String: Any] = [
+        var data: [String: Any] = [
             "messageId": messageId,
             "text": text,
             "language": language
         ]
+        
+        // Add user's fluent language if provided
+        if let userFluentLanguage = userFluentLanguage {
+            data["userFluentLanguage"] = userFluentLanguage
+        }
         
         return try await withCheckedThrowingContinuation { continuation in
             let callable = functions.httpsCallable("analyzeMessageFormality")
@@ -218,7 +231,8 @@ class AIService: ObservableObject {
         text: String,
         currentLevel: FormalityLevel?,
         targetLevel: FormalityLevel,
-        language: String
+        language: String,
+        userFluentLanguage: String? = nil
     ) async throws -> FormalityAdjustment {
         var data: [String: Any] = [
             "text": text,
@@ -228,6 +242,11 @@ class AIService: ObservableObject {
         
         if let currentLevel = currentLevel {
             data["currentLevel"] = currentLevel.rawValue
+        }
+        
+        // Add user's fluent language if provided
+        if let userFluentLanguage = userFluentLanguage {
+            data["userFluentLanguage"] = userFluentLanguage
         }
         
         return try await withCheckedThrowingContinuation { continuation in
@@ -259,11 +278,16 @@ class AIService: ObservableObject {
     /**
      * Detect slang and idioms in text (PR #5)
      */
-    func detectSlangIdioms(text: String, language: String) async throws -> [DetectedPhrase] {
-        let data: [String: Any] = [
+    func detectSlangIdioms(text: String, language: String, userFluentLanguage: String? = nil) async throws -> [DetectedPhrase] {
+        var data: [String: Any] = [
             "text": text,
             "language": language
         ]
+        
+        // Add user's fluent language if provided
+        if let userFluentLanguage = userFluentLanguage {
+            data["userFluentLanguage"] = userFluentLanguage
+        }
         
         return try await withCheckedThrowingContinuation { continuation in
             let callable = functions.httpsCallable("detectSlangIdioms")
@@ -298,7 +322,8 @@ class AIService: ObservableObject {
     func explainPhrase(
         phrase: String,
         language: String,
-        context: String?
+        context: String?,
+        userFluentLanguage: String? = nil
     ) async throws -> PhraseExplanation {
         var data: [String: Any] = [
             "phrase": phrase,
@@ -307,6 +332,11 @@ class AIService: ObservableObject {
         
         if let context = context {
             data["context"] = context
+        }
+        
+        // Add user's fluent language if provided
+        if let userFluentLanguage = userFluentLanguage {
+            data["userFluentLanguage"] = userFluentLanguage
         }
         
         return try await withCheckedThrowingContinuation { continuation in

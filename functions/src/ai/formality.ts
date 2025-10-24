@@ -56,6 +56,7 @@ interface FormalityAnalysisRequest {
   messageId: string;
   text: string;
   language: string;
+  userFluentLanguage?: string;
 }
 
 interface FormalityAdjustmentRequest {
@@ -63,6 +64,7 @@ interface FormalityAdjustmentRequest {
   currentLevel?: FormalityLevel;
   targetLevel: FormalityLevel;
   language: string;
+  userFluentLanguage?: string;
 }
 
 interface FormalityAdjustment {
@@ -77,7 +79,7 @@ interface FormalityAdjustment {
 /**
  * Build prompt for formality analysis
  */
-function buildFormalityAnalysisPrompt(text: string, language: string): string {
+function buildFormalityAnalysisPrompt(text: string, language: string, explanationLanguage: string): string {
   return `You are a linguistic expert specializing in formality analysis across languages.
 
 Analyze the formality level of the following ${language} text and provide a detailed assessment.
@@ -92,6 +94,8 @@ Formality Levels:
 - casual: Friends, peers (du, tu, tú)
 - very_casual: Close friends, family (slang, abbreviations)
 
+IMPORTANT: Provide all explanations in ${explanationLanguage}. If you don't know ${explanationLanguage}, provide the explanation in English.
+
 Provide your analysis in the following JSON format:
 {
   "level": "formal|casual|neutral|very_formal|very_casual",
@@ -101,10 +105,10 @@ Provide your analysis in the following JSON format:
       "text": "specific word or phrase",
       "type": "pronoun|verb_form|honorific|vocabulary|grammar",
       "position": 0,
-      "explanation": "why this indicates formality"
+      "explanation": "why this indicates formality (in ${explanationLanguage})"
     }
   ],
-  "explanation": "2-3 sentence explanation of the formality level",
+  "explanation": "2-3 sentence explanation of the formality level (in ${explanationLanguage})",
   "suggestedLevel": "formal|casual|neutral" (optional, only if current level seems inappropriate)
 }
 
@@ -126,7 +130,8 @@ function buildFormalityAdjustmentPrompt(
   text: string,
   currentLevel: FormalityLevel,
   targetLevel: FormalityLevel,
-  language: string
+  language: string,
+  explanationLanguage: string
 ): string {
   return `You are a linguistic expert specializing in formality adjustment across languages.
 
@@ -153,10 +158,12 @@ Language-specific adjustments:
 - Korean: 반말 ↔ 존댓말
 - English: contractions, vocabulary, sentence complexity
 
+IMPORTANT: Provide the changes explanation in ${explanationLanguage}. If you don't know ${explanationLanguage}, provide the explanation in English.
+
 Provide your response in the following JSON format:
 {
   "adjustedText": "the rewritten text",
-  "changesExplanation": "brief explanation of key changes made"
+  "changesExplanation": "brief explanation of key changes made (in ${explanationLanguage})"
 }
 
 Return ONLY the JSON object, no additional text.`;
@@ -191,6 +198,9 @@ export const analyzeMessageFormality = functions.https.onCall(
 
       console.log(`Formality analysis request from ${userId}: message ${data.messageId} in ${data.language}`);
 
+      // Use user's fluent language for explanations, default to English
+      const explanationLanguage = data.userFluentLanguage || 'en';
+
       // Check cache first
       const cacheKey = generateCacheKey('formality', data.messageId, data.language);
       const cached = await getCached<FormalityAnalysis>('formality_cache', cacheKey);
@@ -201,7 +211,7 @@ export const analyzeMessageFormality = functions.https.onCall(
       }
 
       // Build prompt and call GPT-4
-      const prompt = buildFormalityAnalysisPrompt(data.text, data.language);
+      const prompt = buildFormalityAnalysisPrompt(data.text, data.language, explanationLanguage);
       const response = await callOpenAI({
         model: 'gpt-4o-mini',
         messages: [
@@ -276,6 +286,9 @@ export const adjustMessageFormality = functions.https.onCall(
 
       console.log(`Formality adjustment request from ${userId}: ${data.currentLevel || 'unknown'} → ${data.targetLevel} in ${data.language}`);
 
+      // Use user's fluent language for explanations, default to English
+      const explanationLanguage = data.userFluentLanguage || 'en';
+
       // Check cache for this specific adjustment
       const cacheKey = generateCacheKey(
         'formality-adjustment',
@@ -292,7 +305,7 @@ export const adjustMessageFormality = functions.https.onCall(
       // If currentLevel not provided, analyze first
       let currentLevel: FormalityLevel = data.currentLevel || FormalityLevel.NEUTRAL;
       if (!data.currentLevel) {
-        const analysisPrompt = buildFormalityAnalysisPrompt(data.text, data.language);
+        const analysisPrompt = buildFormalityAnalysisPrompt(data.text, data.language, explanationLanguage);
         const analysisResponse = await callOpenAI({
           model: 'gpt-4o-mini',
           messages: [
@@ -311,7 +324,8 @@ export const adjustMessageFormality = functions.https.onCall(
         data.text,
         currentLevel,
         data.targetLevel,
-        data.language
+        data.language,
+        explanationLanguage
       );
       const response = await callOpenAI({
         model: 'gpt-4o-mini',

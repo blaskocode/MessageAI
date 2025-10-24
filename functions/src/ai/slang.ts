@@ -21,6 +21,7 @@ import {
 interface SlangDetectionRequest {
   text: string;
   language: string;
+  userFluentLanguage?: string;
 }
 
 interface DetectedPhrase {
@@ -36,6 +37,7 @@ interface PhraseExplanationRequest {
   phrase: string;
   language: string;
   context?: string;
+  userFluentLanguage?: string;
 }
 
 interface PhraseExplanation {
@@ -49,7 +51,7 @@ interface PhraseExplanation {
 /**
  * Build prompt for slang/idiom detection
  */
-function buildDetectionPrompt(text: string, language: string): string {
+function buildDetectionPrompt(text: string, language: string, explanationLanguage: string): string {
   return `You are a linguistic expert specializing in slang and idioms across languages.
 
 Analyze the following ${language} text and identify any slang terms or idiomatic expressions.
@@ -65,16 +67,18 @@ For each slang term or idiom found, provide:
 - Similar expressions
 - Example sentences
 
+IMPORTANT: Provide all meanings, origins, and examples in ${explanationLanguage}. If you don't know ${explanationLanguage}, provide the explanation in English.
+
 Return a JSON array of detected phrases:
 {
   "phrases": [
     {
       "phrase": "the actual phrase from the text",
       "type": "slang" or "idiom",
-      "meaning": "what it means",
-      "origin": "where it comes from (or 'Unknown')",
+      "meaning": "what it means (in ${explanationLanguage})",
+      "origin": "where it comes from (in ${explanationLanguage}) or 'Unknown'",
       "similar": ["similar phrase 1", "similar phrase 2"],
-      "examples": ["example sentence 1", "example sentence 2"]
+      "examples": ["example sentence 1 (in ${explanationLanguage})", "example sentence 2 (in ${explanationLanguage})"]
     }
   ]
 }
@@ -87,7 +91,7 @@ Return ONLY the JSON object, no additional text.`;
 /**
  * Build prompt for phrase explanation
  */
-function buildExplanationPrompt(phrase: string, language: string, context?: string): string {
+function buildExplanationPrompt(phrase: string, language: string, explanationLanguage: string, context?: string): string {
   const contextInfo = context ? `\n\nContext where it was used:\n"${context}"` : '';
   
   return `You are a linguistic expert. Explain the following ${language} phrase in detail.
@@ -101,13 +105,15 @@ Provide a comprehensive explanation including:
 - Cultural significance
 - Regional variations if any
 
+IMPORTANT: Provide all explanations in ${explanationLanguage}. If you don't know ${explanationLanguage}, provide the explanation in English.
+
 Return your explanation as JSON:
 {
   "phrase": "${phrase}",
-  "meaning": "detailed meaning explanation",
-  "origin": "origin and etymology",
-  "examples": ["example 1", "example 2", "example 3"],
-  "culturalNotes": "cultural context and significance"
+  "meaning": "detailed meaning explanation (in ${explanationLanguage})",
+  "origin": "origin and etymology (in ${explanationLanguage})",
+  "examples": ["example 1 (in ${explanationLanguage})", "example 2 (in ${explanationLanguage})", "example 3 (in ${explanationLanguage})"],
+  "culturalNotes": "cultural context and significance (in ${explanationLanguage})"
 }
 
 Return ONLY the JSON object, no additional text.`;
@@ -138,6 +144,9 @@ export const detectSlangIdioms = functions.https.onCall(
 
       console.log(`Slang detection request from ${userId} in ${data.language}`);
 
+      // Use user's fluent language for explanations, default to English
+      const explanationLanguage = data.userFluentLanguage || 'en';
+
       // Check cache first
       const cacheKey = generateCacheKey('slang', data.text, data.language);
       const cached = await getCached<{ phrases: DetectedPhrase[] }>('slang_cache', cacheKey);
@@ -148,7 +157,7 @@ export const detectSlangIdioms = functions.https.onCall(
       }
 
       // Build prompt and call GPT-4
-      const prompt = buildDetectionPrompt(data.text, data.language);
+      const prompt = buildDetectionPrompt(data.text, data.language, explanationLanguage);
       const response = await callOpenAI({
         model: 'gpt-4o-mini',
         messages: [
@@ -208,6 +217,9 @@ export const explainPhrase = functions.https.onCall(
 
       console.log(`Phrase explanation request from ${userId}: "${data.phrase}" in ${data.language}`);
 
+      // Use user's fluent language for explanations, default to English
+      const explanationLanguage = data.userFluentLanguage || 'en';
+
       // Check cache first
       const cacheKey = generateCacheKey('phrase-explanation', data.phrase, data.language, data.context || 'none');
       const cached = await getCached<PhraseExplanation>('phrase_explanations', cacheKey);
@@ -218,7 +230,7 @@ export const explainPhrase = functions.https.onCall(
       }
 
       // Build prompt and call GPT-4
-      const prompt = buildExplanationPrompt(data.phrase, data.language, data.context);
+      const prompt = buildExplanationPrompt(data.phrase, data.language, explanationLanguage, data.context);
       const response = await callOpenAI({
         model: 'gpt-4o-mini',
         messages: [

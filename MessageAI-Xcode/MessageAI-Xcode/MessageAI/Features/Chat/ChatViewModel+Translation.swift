@@ -156,7 +156,8 @@ extension ChatViewModel {
             let context = try await aiService.analyzeCulturalContext(
                 text: text,
                 sourceLanguage: sourceLanguage,
-                targetLanguage: targetLanguage
+                targetLanguage: targetLanguage,
+                userFluentLanguage: userFluentLanguages.first
             )
 
             print("✅ [Cultural] Analysis complete:")

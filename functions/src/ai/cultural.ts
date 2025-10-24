@@ -31,7 +31,7 @@ export const analyzeCulturalContext = functions.https.onCall(
       const userId = requireAuth(context);
 
       // Validate input
-      const { text, sourceLanguage, targetLanguage } = data;
+      const { text, sourceLanguage, targetLanguage, userFluentLanguage } = data;
       
       if (!text || typeof text !== 'string') {
         throw new functions.https.HttpsError('invalid-argument', 'Text is required');
@@ -45,6 +45,9 @@ export const analyzeCulturalContext = functions.https.onCall(
           'Source and target languages are required'
         );
       }
+
+      // Use user's fluent language for explanations, default to English
+      const explanationLanguage = userFluentLanguage || 'en';
 
       // Check if analysis already exists in cache
       const cacheKey = generateCacheKey(text, sourceLanguage, targetLanguage);
@@ -65,6 +68,7 @@ export const analyzeCulturalContext = functions.https.onCall(
       
 Source Language: ${sourceLanguage}
 Target Language: ${targetLanguage}
+Explanation Language: ${explanationLanguage}
 Text: "${text}"
 
 Identify:
@@ -74,10 +78,12 @@ Identify:
 4. Different concepts of time or urgency
 5. Other culturally significant elements
 
+IMPORTANT: Provide all explanations in ${explanationLanguage}. If you don't know ${explanationLanguage}, provide the explanation in English.
+
 If there IS significant cultural context worth explaining, respond with:
 {
   "hasContext": true,
-  "explanation": "A concise 2-3 sentence explanation of the cultural nuance",
+  "explanation": "A concise 2-3 sentence explanation of the cultural nuance in ${explanationLanguage}",
   "category": "indirect_communication",
   "confidence": 0.95
 }

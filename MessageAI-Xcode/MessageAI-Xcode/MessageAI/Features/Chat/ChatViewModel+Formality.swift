@@ -50,7 +50,8 @@ extension ChatViewModel {
             let analysis = try await AIService.shared.analyzeFormalityAnalysis(
                 messageId: message.id,
                 text: text,
-                language: language
+                language: language,
+                userFluentLanguage: userFluentLanguages.first
             )
             
             // Cache the result
@@ -94,7 +95,8 @@ extension ChatViewModel {
                 text: text,
                 currentLevel: formalityAnalyses[message.id]?.level,
                 targetLevel: targetLevel,
-                language: language
+                language: language,
+                userFluentLanguage: userFluentLanguages.first
             )
             
             // Cache the adjusted version
