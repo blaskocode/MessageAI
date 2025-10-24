@@ -106,6 +106,12 @@ class NotificationService: NSObject, ObservableObject {
         updateAppBadge()
     }
 
+    /// Decrements the unread message badge count
+    func decrementBadgeCount(by count: Int = 1) {
+        unreadCount = max(0, unreadCount - count)
+        updateAppBadge()
+    }
+
     /// Clears the badge count (call when opening conversation list)
     func clearBadgeCount() {
         unreadCount = 0

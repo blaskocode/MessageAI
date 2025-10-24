@@ -167,8 +167,12 @@ struct ChatView: View {
                     .padding(10)
                     .frame(minHeight: 40)
                     .background(
-                        RoundedRectangle(cornerRadius: 20)
+                        RoundedRectangle(cornerRadius: 22)
                             .fill(Color(.systemGray6))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 22)
+                                    .strokeBorder(Color.messagePrimary.opacity(0.1), lineWidth: 1)
+                            )
                     )
                     .onChange(of: messageText) {
                         viewModel.updateTypingStatus(isTyping: !messageText.isEmpty)
@@ -177,7 +181,11 @@ struct ChatView: View {
                 Button(action: sendMessage) {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.system(size: 36))
-                        .foregroundColor(messageText.isEmpty ? .gray : .messagePrimary)
+                        .foregroundStyle(
+                            messageText.isEmpty ? 
+                            Color.gray : 
+                            Color.messagePrimary
+                        )
                 }
                 .disabled(messageText.isEmpty)
                 .scaleEffect(messageText.isEmpty ? 0.9 : 1.0)
@@ -185,7 +193,10 @@ struct ChatView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            .background(Color(.systemBackground))
+            .background(
+                Color(.systemBackground)
+                    .shadow(color: Color.messagePrimary.opacity(0.05), radius: 8, x: 0, y: -2)
+            )
         }
         .navigationTitle(viewModel.conversationTitle)
         .navigationBarTitleDisplayMode(.inline)
@@ -197,7 +208,7 @@ struct ChatView: View {
                         showingAIAssistant = true
                     }) {
                         Image(systemName: "sparkles")
-                            .foregroundColor(.purple)
+                            .foregroundStyle(Color.messageGradient)
                             .symbolVariant(.fill)
                             .font(.system(size: 20, weight: .semibold))
                     }
@@ -208,7 +219,7 @@ struct ChatView: View {
                         viewModel.saveAutoTranslateSetting() // Persist the setting
                     } label: {
                         Image(systemName: "globe")
-                            .foregroundColor(viewModel.autoTranslateEnabled ? .blue : .gray)
+                            .foregroundColor(viewModel.autoTranslateEnabled ? Color.messagePrimary : .gray)
                             .symbolVariant(viewModel.autoTranslateEnabled ? .fill : .none)
                             .font(.system(size: 20, weight: viewModel.autoTranslateEnabled ? .bold : .regular))
                     }

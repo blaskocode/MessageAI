@@ -10,6 +10,7 @@ import SwiftUI
 struct ConversationListView: View {
     @StateObject private var viewModel = ConversationListViewModel()
     @EnvironmentObject var authViewModel: AuthViewModel
+    @Environment(\.scenePhase) private var scenePhase
     @State private var selectedConversationId: String?
     @State private var showLogoutConfirmation = false
     @State private var navigateToConversationId: String?
@@ -84,6 +85,16 @@ struct ConversationListView: View {
                     navigateToConversationId = nil
                 }
             }
+            .onChange(of: scenePhase) { oldPhase, newPhase in
+                switch newPhase {
+                case .background:
+                    viewModel.handleAppBackgrounded()
+                case .active:
+                    viewModel.handleAppForegrounded()
+                default:
+                    break
+                }
+            }
         }
     }
 
@@ -153,7 +164,7 @@ struct ConversationRow: View {
                                 .clipShape(Circle())
                                 .overlay {
                                     Circle()
-                                        .strokeBorder(Color(.systemGray5), lineWidth: 0.5)
+                                        .strokeBorder(Color.messagePrimary.opacity(0.2), lineWidth: 1)
                                 }
                         case .failure, .empty:
                             defaultProfileCircle(for: conversation)
@@ -208,11 +219,13 @@ struct ConversationRow: View {
                 }
             }
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 0)
-        .background(Color(.systemBackground))
-        .cornerRadius(12)
-        .shadow(color: .black.opacity(0.03), radius: 1, y: 1)
+        .padding(.vertical, 10)
+        .padding(.horizontal, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(.systemBackground))
+                .shadow(color: Color.messagePrimary.opacity(0.08), radius: 6, x: 0, y: 2)
+        )
     }
 
     private func getInitials(for conversation: Conversation) -> String {
@@ -274,7 +287,7 @@ struct ConversationRow: View {
             .frame(width: 54, height: 54)
             .overlay {
                 Circle()
-                    .strokeBorder(Color(.systemGray5), lineWidth: 0.5)
+                    .strokeBorder(Color.messagePrimary.opacity(0.2), lineWidth: 1)
             }
             .overlay {
                 Text(getInitials(for: conversation))

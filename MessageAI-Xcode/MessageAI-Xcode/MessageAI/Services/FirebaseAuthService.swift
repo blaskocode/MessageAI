@@ -120,20 +120,20 @@ class FirebaseAuthService: ObservableObject {
     
     private func generateRandomProfileColor() -> String {
         let colors = [
-            "#FF6B6B", // Red
-            "#4ECDC4", // Teal
-            "#45B7D1", // Blue
-            "#FFA07A", // Salmon
-            "#98D8C8", // Mint
-            "#F7DC6F", // Yellow
-            "#BB8FCE", // Purple
-            "#85C1E2", // Light Blue
-            "#F8B739", // Orange
-            "#52B788", // Green
-            "#F06292", // Pink
-            "#7986CB"  // Indigo
+            "#8B45F5", // Rich Purple (matches messagePrimary)
+            "#33C7D9", // Vibrant Teal (matches messageSecondary)
+            "#FF6B9D", // Modern Pink
+            "#4ECDC4", // Soft Teal
+            "#A8E6CF", // Mint Green
+            "#FFD93D", // Golden Yellow
+            "#6C5CE7", // Deep Purple
+            "#74B9FF", // Sky Blue
+            "#FD79A8", // Coral Pink
+            "#00B894", // Emerald Green
+            "#FDCB6E", // Warm Orange
+            "#E17055"  // Terracotta
         ]
-        return colors.randomElement() ?? "#4ECDC4"
+        return colors.randomElement() ?? "#8B45F5"
     }
 }
 

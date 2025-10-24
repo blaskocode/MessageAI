@@ -528,6 +528,9 @@ class ChatViewModel: ObservableObject {
                 
                 // Clear any lingering notifications for this conversation
                 NotificationService.shared.clearNotificationsForConversation(conversationId: conversationId)
+                
+                // Decrement badge count
+                NotificationService.shared.decrementBadgeCount()
             } catch {
                 print("⚠️ Failed to mark as read: \(error)")
             }

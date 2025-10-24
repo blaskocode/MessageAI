@@ -27,6 +27,9 @@ class ConversationListViewModel: ObservableObject {
 
     // Track real-time online status for all participants
     @Published var userPresence: [String: Bool] = [:]  // userId -> isOnline
+    
+    // Background task tracking for notifications
+    nonisolated(unsafe) private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
 
     func loadConversations() {
         guard let userId = firebaseService.currentUserId else {
@@ -51,6 +54,26 @@ class ConversationListViewModel: ObservableObject {
         listener = firebaseService.fetchConversations(userId: userId) { [weak self] documents in
             self?.isLoading = false
             self?.parseConversations(documents)
+        }
+    }
+
+    func handleAppBackgrounded() {
+        // Request background time from iOS to keep listener alive
+        backgroundTask = UIApplication.shared.beginBackgroundTask { [weak self] in
+            self?.endBackgroundTask()
+        }
+        print("✅ Background task started for notifications")
+    }
+
+    func handleAppForegrounded() {
+        endBackgroundTask()
+        print("✅ App foregrounded, background task ended")
+    }
+
+    nonisolated private func endBackgroundTask() {
+        if backgroundTask != .invalid {
+            UIApplication.shared.endBackgroundTask(backgroundTask)
+            backgroundTask = .invalid
         }
     }
 
@@ -286,6 +309,7 @@ class ConversationListViewModel: ObservableObject {
     }
 
     deinit {
+        endBackgroundTask()
         listener?.remove()
         presenceListeners.forEach { $0.remove() }
     }

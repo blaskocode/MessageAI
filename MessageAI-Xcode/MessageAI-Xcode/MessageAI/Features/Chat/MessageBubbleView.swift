@@ -103,14 +103,26 @@ struct MessageBubble: View {
             VStack(alignment: isFromCurrentUser ? .trailing : .leading, spacing: 4) {
                 if let text = message.text {
                     VStack(alignment: isFromCurrentUser ? .trailing : .leading, spacing: 8) {
-                        // Original message text
+                        // Original message text with enhanced styling
                         Text(text)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
-                            .background(isFromCurrentUser ? Color.messagePrimary : Color.messageReceived)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            .background(
+                                Group {
+                                    if isFromCurrentUser {
+                                        // Beautiful gradient for sent messages
+                                        RoundedRectangle(cornerRadius: 20)
+                                            .fill(Color.messageGradient)
+                                            .shadow(color: Color.messagePrimary.opacity(0.3), radius: 4, x: 0, y: 2)
+                                    } else {
+                                        // Enhanced received message styling
+                                        RoundedRectangle(cornerRadius: 20)
+                                            .fill(Color.messageReceived)
+                                            .shadow(color: .black.opacity(0.08), radius: 3, x: 0, y: 1)
+                                    }
+                                }
+                            )
                             .foregroundColor(isFromCurrentUser ? .white : .primary)
-                            .cornerRadius(18)
-                            .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
                         
                         // AI Badges Container - Only show if there's AI content
                         if hasAnyAIContent {

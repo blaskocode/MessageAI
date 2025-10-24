@@ -48,6 +48,9 @@ class AuthViewModel: ObservableObject {
             isAuthenticated = true
             isLoading = false
 
+            // Start presence monitoring for new user
+            PresenceManager.shared.startPresenceMonitoring(userId: userId)
+
         } catch {
             errorMessage = "Sign up failed: \(error.localizedDescription)"
             isLoading = false
