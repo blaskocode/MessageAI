@@ -130,7 +130,7 @@ extension ChatViewModel {
         
         // Check if message is in non-fluent language
         let fluentLanguages = userFluentLanguages
-        let targetLanguage = fluentLanguages.first ?? "en"
+        let targetLanguage = fluentLanguages.first ?? "en" // Primary language (first in array)
         
         if !fluentLanguages.contains(detectedLang.lowercased()) {
             await translateMessage(messageId: message.id, targetLanguage: targetLanguage)

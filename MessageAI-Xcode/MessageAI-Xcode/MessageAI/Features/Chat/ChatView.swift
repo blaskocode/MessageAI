@@ -242,7 +242,8 @@ struct ChatView: View {
                 FormalityDetailSheet(
                     message: message,
                     analysis: analysis,
-                    viewModel: viewModel
+                    viewModel: viewModel,
+                    userLanguage: viewModel.userFluentLanguages.first ?? "en"
                 )
             }
         }

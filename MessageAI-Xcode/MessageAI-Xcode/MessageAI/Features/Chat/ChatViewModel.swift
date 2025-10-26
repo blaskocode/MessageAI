@@ -565,6 +565,9 @@ class ChatViewModel: ObservableObject {
     @Published var culturalContexts: [String: CulturalContext] = [:]
     @Published var dismissedHints: Set<String> = []
     
+    // Message Reactions
+    @Published var messageReactions: [String: [MessageReaction]] = [:]
+    
     // Translation methods moved to ChatViewModel+Translation.swift extension
 
     // MARK: - Cleanup
@@ -589,6 +592,65 @@ class ChatViewModel: ObservableObject {
         Task { @MainActor [weak self] in
             self?.cleanup()
         }
+    }
+    
+    // MARK: - Message Reactions
+    
+    func addReaction(messageId: String, emoji: String) {
+        guard let currentUserId = firebaseService.currentUserId else { return }
+        
+        let reaction = MessageReaction(
+            emoji: emoji,
+            userId: currentUserId,
+            timestamp: Date(),
+            count: 1
+        )
+        
+        // Add to local state
+        if messageReactions[messageId] == nil {
+            messageReactions[messageId] = []
+        }
+        messageReactions[messageId]?.append(reaction)
+        
+        // Save to Firestore
+        Task {
+            await saveReactionToFirestore(messageId: messageId, reaction: reaction)
+        }
+    }
+    
+    func toggleReaction(messageId: String, emoji: String) {
+        guard let currentUserId = firebaseService.currentUserId else { return }
+        
+        if let existingReaction = messageReactions[messageId]?.first(where: { $0.emoji == emoji && $0.userId == currentUserId }) {
+            // Remove existing reaction
+            messageReactions[messageId]?.removeAll { $0.id == existingReaction.id }
+            if messageReactions[messageId]?.isEmpty == true {
+                messageReactions[messageId] = nil
+            }
+            
+            Task {
+                await removeReactionFromFirestore(messageId: messageId, emoji: emoji, userId: currentUserId)
+            }
+        } else {
+            // Add new reaction
+            addReaction(messageId: messageId, emoji: emoji)
+        }
+    }
+    
+    func isReactionFromCurrentUser(_ reaction: MessageReaction) -> Bool {
+        return reaction.userId == firebaseService.currentUserId
+    }
+    
+    private func saveReactionToFirestore(messageId: String, reaction: MessageReaction) async {
+        // TODO: Implement Firestore reaction storage
+        // For now, reactions are stored locally only
+        print("✅ Reaction saved locally: \(reaction.emoji)")
+    }
+    
+    private func removeReactionFromFirestore(messageId: String, emoji: String, userId: String) async {
+        // TODO: Implement Firestore reaction removal
+        // For now, reactions are removed locally only
+        print("✅ Reaction removed locally: \(emoji)")
     }
     
     // MARK: - Smart Replies (PR #7)

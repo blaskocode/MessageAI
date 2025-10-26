@@ -67,7 +67,7 @@ class PresenceManager: ObservableObject {
 
 @main
 struct MessageAIApp: App {
-
+    @StateObject private var settingsViewModel = SettingsViewModel()
     @Environment(\.scenePhase) private var scenePhase
     
     // Force Firebase configuration before accessing FirebaseService
@@ -79,6 +79,8 @@ struct MessageAIApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(firebaseService)
+                .environmentObject(settingsViewModel)
+                .preferredColorScheme(settingsViewModel.darkModeEnabled ? .dark : .light)
         }
         .onChange(of: scenePhase) { oldPhase, newPhase in
             handleScenePhaseChange(oldPhase: oldPhase, newPhase: newPhase)

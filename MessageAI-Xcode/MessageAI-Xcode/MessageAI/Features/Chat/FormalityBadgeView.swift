@@ -8,6 +8,7 @@ import SwiftUI
 struct FormalityBadgeView: View {
     let analysis: FormalityAnalysis
     let onTap: () -> Void
+    let userLanguage: String
     
     var body: some View {
         Button(action: onTap) {
@@ -15,7 +16,7 @@ struct FormalityBadgeView: View {
                 Text(analysis.level.emoji)
                     .font(.caption)
                 
-                Text(analysis.level.displayName)
+                Text(analysis.level.displayName(in: userLanguage))
                     .font(.caption)
                     .fontWeight(.medium)
                 
@@ -43,6 +44,7 @@ struct FormalityDetailSheet: View {
     let analysis: FormalityAnalysis
     @Environment(\.dismiss) var dismiss
     @ObservedObject var viewModel: ChatViewModel
+    let userLanguage: String
     
     var body: some View {
         NavigationView {
@@ -73,7 +75,7 @@ struct FormalityDetailSheet: View {
                             Text(analysis.level.emoji)
                                 .font(.title)
                             VStack(alignment: .leading) {
-                                Text(analysis.level.displayName)
+                                Text(analysis.level.displayName(in: userLanguage))
                                     .font(.title3)
                                     .fontWeight(.semibold)
                                 Text("\(Int(analysis.confidence * 100))% confident")
@@ -171,7 +173,8 @@ struct FormalityDetailSheet: View {
             explanation: "This message uses formal language.",
             suggestedLevel: nil
         ),
-        onTap: {}
+        onTap: {},
+        userLanguage: "en"
     )
 }
 

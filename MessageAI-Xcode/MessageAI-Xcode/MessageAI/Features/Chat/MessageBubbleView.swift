@@ -104,25 +104,34 @@ struct MessageBubble: View {
                 if let text = message.text {
                     VStack(alignment: isFromCurrentUser ? .trailing : .leading, spacing: 8) {
                         // Original message text with enhanced styling
-                        Text(text)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 12)
-                            .background(
-                                Group {
-                                    if isFromCurrentUser {
-                                        // Beautiful gradient for sent messages
-                                        RoundedRectangle(cornerRadius: 20)
-                                            .fill(Color.messageGradient)
-                                            .shadow(color: Color.messagePrimary.opacity(0.3), radius: 4, x: 0, y: 2)
-                                    } else {
-                                        // Enhanced received message styling
-                                        RoundedRectangle(cornerRadius: 20)
-                                            .fill(Color.messageReceived)
-                                            .shadow(color: .black.opacity(0.08), radius: 3, x: 0, y: 1)
+                        VStack(alignment: isFromCurrentUser ? .trailing : .leading, spacing: 8) {
+                            Text(text)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                                .background(
+                                    Group {
+                                        if isFromCurrentUser {
+                                            // Beautiful gradient for sent messages
+                                            RoundedRectangle(cornerRadius: 20)
+                                                .fill(Color.messageGradient)
+                                                .shadow(color: Color.messagePrimary.opacity(0.3), radius: 4, x: 0, y: 2)
+                                        } else {
+                                            // Enhanced received message styling
+                                            RoundedRectangle(cornerRadius: 20)
+                                                .fill(Color.messageReceived)
+                                                .shadow(color: .black.opacity(0.08), radius: 3, x: 0, y: 1)
+                                        }
                                     }
+                                )
+                                .foregroundColor(isFromCurrentUser ? .white : .primary)
+                            
+                            // Link Previews
+                            if let urls = extractURLs(from: text), !urls.isEmpty {
+                                ForEach(urls, id: \.self) { url in
+                                    LinkPreviewView(url: url)
                                 }
-                            )
-                            .foregroundColor(isFromCurrentUser ? .white : .primary)
+                            }
+                        }
                         
                         // AI Badges Container - Only show if there's AI content
                         if hasAnyAIContent {
@@ -130,10 +139,14 @@ struct MessageBubble: View {
                                 // Formality Badge (PR #4)
                                 if hasFormalityData && showFormalityBadge,
                                    let analysis = viewModel.formalityAnalyses[message.id] {
-                                    FormalityBadgeView(analysis: analysis) {
-                                        viewModel.selectedMessageForFormality = message
-                                        viewModel.showingFormalitySheet = true
-                                    }
+                                    FormalityBadgeView(
+                                        analysis: analysis,
+                                        onTap: {
+                                            viewModel.selectedMessageForFormality = message
+                                            viewModel.showingFormalitySheet = true
+                                        },
+                                        userLanguage: viewModel.userFluentLanguages.first ?? "en"
+                                    )
                                     .opacity(showFormalityBadge ? 1.0 : 0.0)
                                 }
                                 
@@ -195,7 +208,7 @@ struct MessageBubble: View {
                                 HStack(spacing: 4) {
                                     Image(systemName: "globe")
                                         .font(.caption2)
-                                    Text(showTranslation ? "Hide translation" : "Tap to translate")
+                                    Text(showTranslation ? hideTranslationText(for: viewModel.userFluentLanguages.first ?? "en") : translateButtonText(for: viewModel.userFluentLanguages.first ?? "en"))
                                         .font(.caption2)
                                 }
                                 .foregroundColor(.blue)
@@ -225,7 +238,7 @@ struct MessageBubble: View {
                                             .background(Color(.systemGray6))
                                             .cornerRadius(12)
                                         
-                                        Text("Translated from \(languageName(translation.originalLanguage))")
+                                        Text(translatedFromText(for: translation.originalLanguage, targetLang: viewModel.userFluentLanguages.first ?? "en"))
                                             .font(.caption2)
                                             .foregroundColor(.secondary)
                                             .padding(.horizontal, 4)
@@ -253,6 +266,11 @@ struct MessageBubble: View {
                             }
                         }
                     }
+                }
+                
+                // Message Reactions
+                if !isFromCurrentUser {
+                    ReactionView(message: message, viewModel: viewModel)
                 }
 
                 HStack(spacing: 4) {
@@ -285,6 +303,11 @@ struct MessageBubble: View {
                 .padding(.horizontal, 4)
             }
             .animation(.spring(response: 0.35, dampingFraction: 0.75), value: hasAnyAIContent)
+            .messageBubbleAccessibility(
+                message: message,
+                isFromCurrentUser: isFromCurrentUser,
+                senderName: senderDetails?.name
+            )
 
             if !isFromCurrentUser {
                 Spacer(minLength: 50)
@@ -323,6 +346,69 @@ struct MessageBubble: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.white)
             }
+    }
+    
+    // MARK: - Localization Helpers
+    
+    private func translateButtonText(for targetLanguage: String) -> String {
+        switch targetLanguage {
+        case "es": return "Tocar para traducir"
+        case "fr": return "Appuyez pour traduire"
+        case "de": return "Tippen zum Übersetzen"
+        case "ja": return "タップして翻訳"
+        case "zh": return "点击翻译"
+        case "pt": return "Toque para traduzir"
+        case "it": return "Tocca per tradurre"
+        case "ru": return "Нажмите для перевода"
+        default: return "Tap to translate"
+        }
+    }
+    
+    private func hideTranslationText(for targetLanguage: String) -> String {
+        switch targetLanguage {
+        case "es": return "Ocultar traducción"
+        case "fr": return "Masquer la traduction"
+        case "de": return "Übersetzung ausblenden"
+        case "ja": return "翻訳を隠す"
+        case "zh": return "隐藏翻译"
+        case "pt": return "Ocultar tradução"
+        case "it": return "Nascondi traduzione"
+        case "ru": return "Скрыть перевод"
+        default: return "Hide translation"
+        }
+    }
+    
+    private func translatedFromText(for sourceLang: String, targetLang: String) -> String {
+        let langName = languageName(sourceLang)
+        switch targetLang {
+        case "es": return "Traducido desde \(langName)"
+        case "fr": return "Traduit de \(langName)"
+        case "de": return "Übersetzt von \(langName)"
+        case "ja": return "\(langName)から翻訳"
+        case "zh": return "从\(langName)翻译"
+        case "pt": return "Traduzido de \(langName)"
+        case "it": return "Tradotto da \(langName)"
+        case "ru": return "Переведено с \(langName)"
+        default: return "Translated from \(langName)"
+        }
+    }
+    
+    // MARK: - URL Detection
+    
+    private func extractURLs(from text: String) -> [String]? {
+        let urlPattern = #"(https?://[^\s]+)"#
+        let regex = try? NSRegularExpression(pattern: urlPattern, options: .caseInsensitive)
+        let range = NSRange(location: 0, length: text.utf16.count)
+        
+        let matches = regex?.matches(in: text, options: [], range: range) ?? []
+        let urls = matches.compactMap { match -> String? in
+            if let matchRange = Range(match.range, in: text) {
+                return String(text[matchRange])
+            }
+            return nil
+        }
+        
+        return urls.isEmpty ? nil : urls
     }
 }
 

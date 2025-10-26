@@ -16,6 +16,7 @@ struct ConversationListView: View {
     @State private var navigateToConversationId: String?
     @State private var showProfile = false
     @State private var showSemanticSearch = false
+    @State private var showSettings = false
 
     var body: some View {
         let currentUserId = FirebaseService.shared.currentUserId ?? ""
@@ -39,10 +40,18 @@ struct ConversationListView: View {
                     profileButton
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showSemanticSearch = true
-                    } label: {
-                        Image(systemName: "magnifyingglass")
+                    HStack(spacing: 16) {
+                        Button {
+                            showSettings = true
+                        } label: {
+                            Image(systemName: "gearshape")
+                        }
+                        
+                        Button {
+                            showSemanticSearch = true
+                        } label: {
+                            Image(systemName: "magnifyingglass")
+                        }
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -66,6 +75,9 @@ struct ConversationListView: View {
             }
             .sheet(isPresented: $showSemanticSearch) {
                 SemanticSearchView()
+            }
+            .sheet(isPresented: $showSettings) {
+                SettingsView()
             }
             .onAppear {
                 viewModel.loadConversations()

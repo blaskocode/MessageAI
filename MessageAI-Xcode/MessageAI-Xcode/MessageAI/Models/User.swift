@@ -20,6 +20,11 @@ class User: Identifiable, Codable {
     var fcmToken: String?
     
     // MARK: - AI Features (PR #2)
+    /// User's fluent languages in priority order
+    /// The first language in the array is used for:
+    /// - UI localization (translate buttons, badges)
+    /// - Default translation target
+    /// - Display language for AI features
     var fluentLanguages: [String] // ISO 639-1 language codes (e.g., ["en", "es", "fr"])
     var culturalHintsEnabled: Bool // PR #3: Show cultural context hints
 

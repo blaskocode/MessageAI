@@ -124,73 +124,28 @@ struct ProfileView: View {
                         }
                     }
                     
-                    // AI & Translation Settings (PR #2)
+                    // Quick Settings Access
                     Section {
                         NavigationLink {
-                            LanguageSettingsView(
-                                selectedLanguages: $viewModel.selectedLanguages,
-                                culturalHintsEnabled: $viewModel.culturalHintsEnabled
-                            )
-                            .onChange(of: viewModel.selectedLanguages) { _, newValue in
-                                viewModel.updateLanguages(newValue)
-                            }
+                            SettingsView()
                         } label: {
                             HStack {
-                                Image(systemName: "globe")
+                                Image(systemName: "gearshape.fill")
                                     .foregroundColor(.blue)
                                     .frame(width: 24)
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text("Languages")
+                                    Text("App Settings")
                                         .font(.body)
-                                    Text("\(viewModel.selectedLanguages.count) language\(viewModel.selectedLanguages.count == 1 ? "" : "s") selected")
+                                    Text("AI features, appearance, notifications")
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                 }
                             }
                         }
-                        
-                        Toggle(isOn: Binding(
-                            get: { viewModel.culturalHintsEnabled },
-                            set: { viewModel.updateCulturalHints($0) }
-                        )) {
-                            HStack {
-                                Image(systemName: "lightbulb.fill")
-                                    .foregroundColor(.yellow)
-                                    .frame(width: 24)
-                                Text("Cultural Context Hints")
-                            }
-                        }
-                        
-                        Toggle(isOn: $viewModel.autoAnalyzeFormality) {
-                            HStack {
-                                Image(systemName: "person.2.badge.gearshape")
-                                    .foregroundColor(.blue)
-                                    .frame(width: 24)
-                                Text("Auto-Analyze Formality")
-                            }
-                        }
-                        
-                        Toggle(isOn: $viewModel.autoDetectSlang) {
-                            HStack {
-                                Image(systemName: "text.bubble")
-                                    .foregroundColor(.purple)
-                                    .frame(width: 24)
-                                Text("Auto-Detect Slang & Idioms")
-                            }
-                        }
-                        
-                        Toggle(isOn: $viewModel.autoGenerateSmartReplies) {
-                            HStack {
-                                Image(systemName: "sparkles")
-                                    .foregroundColor(.purple)
-                                    .frame(width: 24)
-                                Text("Smart Reply Suggestions")
-                            }
-                        }
                     } header: {
-                        Text("AI & Translation")
+                        Text("Preferences")
                     } footer: {
-                        Text("Enable automatic slang detection and smart reply suggestions that match your writing style.")
+                        Text("Configure AI features, appearance, and notification preferences.")
                     }
                     
                     // Actions

@@ -92,6 +92,60 @@ enum FormalityLevel: String, Codable {
         }
     }
     
+    func displayName(in language: String) -> String {
+        switch (self, language) {
+        case (.veryFormal, "es"): return "Muy formal"
+        case (.formal, "es"): return "Formal"
+        case (.neutral, "es"): return "Neutral"
+        case (.casual, "es"): return "Informal"
+        case (.veryCasual, "es"): return "Muy informal"
+        
+        case (.veryFormal, "fr"): return "Très formel"
+        case (.formal, "fr"): return "Formel"
+        case (.neutral, "fr"): return "Neutre"
+        case (.casual, "fr"): return "Décontracté"
+        case (.veryCasual, "fr"): return "Très décontracté"
+        
+        case (.veryFormal, "de"): return "Sehr förmlich"
+        case (.formal, "de"): return "Förmlich"
+        case (.neutral, "de"): return "Neutral"
+        case (.casual, "de"): return "Locker"
+        case (.veryCasual, "de"): return "Sehr locker"
+        
+        case (.veryFormal, "ja"): return "とても丁寧"
+        case (.formal, "ja"): return "丁寧"
+        case (.neutral, "ja"): return "普通"
+        case (.casual, "ja"): return "カジュアル"
+        case (.veryCasual, "ja"): return "とてもカジュアル"
+        
+        case (.veryFormal, "zh"): return "非常正式"
+        case (.formal, "zh"): return "正式"
+        case (.neutral, "zh"): return "中性"
+        case (.casual, "zh"): return "随意"
+        case (.veryCasual, "zh"): return "非常随意"
+        
+        case (.veryFormal, "pt"): return "Muito formal"
+        case (.formal, "pt"): return "Formal"
+        case (.neutral, "pt"): return "Neutro"
+        case (.casual, "pt"): return "Casual"
+        case (.veryCasual, "pt"): return "Muito casual"
+        
+        case (.veryFormal, "it"): return "Molto formale"
+        case (.formal, "it"): return "Formale"
+        case (.neutral, "it"): return "Neutro"
+        case (.casual, "it"): return "Casuale"
+        case (.veryCasual, "it"): return "Molto casuale"
+        
+        case (.veryFormal, "ru"): return "Очень формально"
+        case (.formal, "ru"): return "Формально"
+        case (.neutral, "ru"): return "Нейтрально"
+        case (.casual, "ru"): return "Неформально"
+        case (.veryCasual, "ru"): return "Очень неформально"
+        
+        default: return displayName // English fallback
+        }
+    }
+    
     var emoji: String {
         switch self {
         case .veryFormal: return "🎩"
@@ -284,6 +338,24 @@ extension User {
     var aiAssistantEnabled: Bool {
         // Will be implemented in PR #8
         return false
+    }
+}
+
+// MARK: - Message Reactions
+
+struct MessageReaction: Codable, Identifiable, Equatable {
+    let id = UUID()
+    let emoji: String
+    let userId: String
+    let timestamp: Date
+    let count: Int
+    
+    enum CodingKeys: String, CodingKey {
+        case emoji, userId, timestamp, count
+    }
+    
+    static func == (lhs: MessageReaction, rhs: MessageReaction) -> Bool {
+        return lhs.id == rhs.id
     }
 }
 

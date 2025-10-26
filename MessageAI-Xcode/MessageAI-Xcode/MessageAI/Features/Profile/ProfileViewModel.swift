@@ -20,47 +20,12 @@ class ProfileViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var successMessage: String?
     
-    // AI Settings (PR #2-3)
-    @Published var selectedLanguages: Set<String> = ["en"]
-    @Published var culturalHintsEnabled: Bool = true
-    
-    // Formality Settings (PR #4)
-    @Published var autoAnalyzeFormality: Bool {
-        didSet {
-            UserDefaults.standard.set(autoAnalyzeFormality, forKey: "autoAnalyzeFormality")
-        }
-    }
-    
-    // Slang & Idiom Settings (PR #5)
-    @Published var autoDetectSlang: Bool {
-        didSet {
-            UserDefaults.standard.set(autoDetectSlang, forKey: "autoDetectSlang")
-        }
-    }
-    
-    @Published var autoGenerateSmartReplies: Bool {
-        didSet {
-            UserDefaults.standard.set(autoGenerateSmartReplies, forKey: "autoGenerateSmartReplies")
-            print("💾 [Settings] Smart replies auto-generate saved: \(autoGenerateSmartReplies)")
-        }
-    }
-    
     private let db = Firestore.firestore()
     private var userId: String? {
         Auth.auth().currentUser?.uid
     }
     
     init() {
-        // Load formality auto-analyze setting from UserDefaults
-        self.autoAnalyzeFormality = UserDefaults.standard.bool(forKey: "autoAnalyzeFormality")
-        // Load slang auto-detect setting from UserDefaults
-        self.autoDetectSlang = UserDefaults.standard.bool(forKey: "autoDetectSlang")
-        self.autoGenerateSmartReplies = UserDefaults.standard.bool(forKey: "autoGenerateSmartReplies")
-        
-        print("🔧 [Settings] autoAnalyzeFormality: \(self.autoAnalyzeFormality)")
-        print("🔧 [Settings] autoDetectSlang: \(self.autoDetectSlang)")
-        print("🔧 [Settings] autoGenerateSmartReplies: \(self.autoGenerateSmartReplies)")
-        
         loadUserData()
     }
     
@@ -68,7 +33,7 @@ class ProfileViewModel: ObservableObject {
     
     func loadUserData() {
         guard let userId = userId else {
-            errorMessage = "Not signed in"
+            // Silently return - user not authenticated (normal during sign out)
             return
         }
         
@@ -92,8 +57,6 @@ class ProfileViewModel: ObservableObject {
                 // Update UI fields
                 self.displayName = user.displayName
                 self.email = user.email
-                self.selectedLanguages = Set(user.fluentLanguages)
-                self.culturalHintsEnabled = user.culturalHintsEnabled
                 
                 isLoading = false
                 print("✅ [Profile] Loaded user profile: \(user.displayName)")
@@ -129,16 +92,12 @@ class ProfileViewModel: ObservableObject {
         do {
             // Update Firestore
             try await db.collection("users").document(userId).updateData([
-                "displayName": displayName.trimmingCharacters(in: .whitespaces),
-                "fluentLanguages": Array(selectedLanguages),
-                "culturalHintsEnabled": culturalHintsEnabled
+                "displayName": displayName.trimmingCharacters(in: .whitespaces)
             ])
             
             // Update local user object
             if let user = currentUser {
                 user.displayName = displayName.trimmingCharacters(in: .whitespaces)
-                user.fluentLanguages = Array(selectedLanguages)
-                user.culturalHintsEnabled = culturalHintsEnabled
             }
             
             isLoading = false
@@ -156,11 +115,9 @@ class ProfileViewModel: ObservableObject {
         }
     }
     
-    // MARK: - Update Languages
+    // MARK: - Update Languages (called by SettingsViewModel)
     
     func updateLanguages(_ languages: Set<String>) {
-        selectedLanguages = languages
-        
         Task {
             guard let userId = userId else { return }
             
@@ -180,11 +137,9 @@ class ProfileViewModel: ObservableObject {
         }
     }
     
-    // MARK: - Update Cultural Hints Setting
+    // MARK: - Update Cultural Hints Setting (called by SettingsViewModel)
     
     func updateCulturalHints(_ enabled: Bool) {
-        culturalHintsEnabled = enabled
-        
         Task {
             guard let userId = userId else { return }
             
