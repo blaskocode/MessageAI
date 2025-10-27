@@ -176,11 +176,19 @@ class FirebaseService: ObservableObject {
     
     // MARK: - Messages (delegates to FirestoreMessageService)
     
-    func sendMessage(conversationId: String, senderId: String, text: String) async throws -> String {
+    func sendMessage(
+        conversationId: String, 
+        senderId: String, 
+        text: String? = nil,
+        mediaURL: String? = nil,
+        mediaType: String? = nil
+    ) async throws -> String {
         try await messageService.sendMessage(
             conversationId: conversationId,
             senderId: senderId,
-            text: text
+            text: text,
+            mediaURL: mediaURL,
+            mediaType: mediaType
         )
     }
     
@@ -229,6 +237,34 @@ class FirebaseService: ObservableObject {
             conversationId: conversationId,
             messageId: messageId,
             updates: updates
+        )
+    }
+    
+    func addReaction(
+        conversationId: String,
+        messageId: String,
+        emoji: String,
+        userId: String
+    ) async throws {
+        try await messageService.addReaction(
+            conversationId: conversationId,
+            messageId: messageId,
+            emoji: emoji,
+            userId: userId
+        )
+    }
+    
+    func removeReaction(
+        conversationId: String,
+        messageId: String,
+        emoji: String,
+        userId: String
+    ) async throws {
+        try await messageService.removeReaction(
+            conversationId: conversationId,
+            messageId: messageId,
+            emoji: emoji,
+            userId: userId
         )
     }
     

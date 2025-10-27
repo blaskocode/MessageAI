@@ -22,6 +22,7 @@ struct LinkPreviewView: View {
             }
         }
         .onAppear {
+            print("🔗 [LinkPreview] Loading preview for: \(url)")
             Task {
                 await loadPreview()
             }
@@ -40,15 +41,18 @@ struct LinkPreviewView: View {
         hasError = false
         
         do {
+            print("🔗 [LinkPreview] Fetching preview for: \(url)")
             let preview = try await LinkPreviewService.shared.fetchPreview(for: url)
             await MainActor.run {
                 self.preview = preview
                 self.isLoading = false
+                print("✅ [LinkPreview] Successfully loaded preview for: \(url)")
             }
         } catch {
             await MainActor.run {
                 self.hasError = true
                 self.isLoading = false
+                print("❌ [LinkPreview] Failed to load preview for \(url): \(error.localizedDescription)")
             }
         }
     }
@@ -241,8 +245,13 @@ class LinkPreviewService {
         
         let (data, response) = try await session.data(for: request)
         
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 200 else {
+        guard let httpResponse = response as? HTTPURLResponse else {
+            print("❌ [LinkPreview] Invalid response type")
+            throw LinkPreviewError.invalidResponse
+        }
+        
+        guard httpResponse.statusCode == 200 else {
+            print("❌ [LinkPreview] HTTP status code: \(httpResponse.statusCode)")
             throw LinkPreviewError.invalidResponse
         }
         

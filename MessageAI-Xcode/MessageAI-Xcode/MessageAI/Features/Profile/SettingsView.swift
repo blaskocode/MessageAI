@@ -6,7 +6,7 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @StateObject private var viewModel = SettingsViewModel()
+    @EnvironmentObject var viewModel: SettingsViewModel
     @Environment(\.dismiss) var dismiss
     
     var body: some View {
@@ -111,6 +111,9 @@ struct SettingsView: View {
                         Spacer()
                         Toggle("", isOn: $viewModel.culturalHintsEnabled)
                     }
+                    .onChange(of: viewModel.culturalHintsEnabled) { _, newValue in
+                        viewModel.updateCulturalHints(newValue)
+                    }
                     .aiFeatureAccessibility(
                         featureName: "Cultural Context",
                         isEnabled: viewModel.culturalHintsEnabled,
@@ -210,8 +213,14 @@ struct SettingsView: View {
                 }
             }
         }
+        .preferredColorScheme(viewModel.darkModeEnabled ? .dark : .light)
         .dynamicTypeSupport()
         .onAppear {
+            // Reload settings when view appears to ensure latest languages are loaded
+            viewModel.loadSettings()
+        }
+        .refreshable {
+            // Pull to refresh to reload all settings
             viewModel.loadSettings()
         }
     }

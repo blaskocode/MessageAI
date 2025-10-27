@@ -62,17 +62,17 @@ extension Color {
     
     /// Adaptive message primary color
     static var adaptiveMessagePrimary: Color {
-        Color("MessagePrimary") ?? messagePrimary
+        messagePrimary
     }
     
     /// Adaptive message background
     static var adaptiveMessageBackground: Color {
-        Color("MessageBackground") ?? messageBackground
+        messageBackground
     }
     
     /// Adaptive received message background
     static var adaptiveMessageReceived: Color {
-        Color("MessageReceived") ?? messageReceived
+        messageReceived
     }
     
     // MARK: - Semantic Colors

@@ -326,6 +326,54 @@ class ChatViewModel: ObservableObject {
             let deliveredTo = data?["deliveredTo"] as? [String] ?? []
             let readBy = data?["readBy"] as? [String] ?? []
             let detectedLanguage = data?["detectedLanguage"] as? String // PR #2: Language detection
+            
+            // Parse reactions from Firestore
+            if let reactionsArray = data?["reactions"] as? [[String: Any]] {
+                print("📊 [Reactions] Parsing \(reactionsArray.count) reactions for message \(id)")
+                print("📊 [Reactions] Raw data: \(reactionsArray)")
+                
+                // Parse all reactions into MessageReaction objects
+                var allReactions: [MessageReaction] = []
+                
+                for reactionDict in reactionsArray {
+                    guard let emoji = reactionDict["emoji"] as? String,
+                          let userId = reactionDict["userId"] as? String else {
+                        continue
+                    }
+                    
+                    // Parse timestamp - handle both Timestamp and Date
+                    let timestamp: Date
+                    if let firestoreTimestamp = reactionDict["timestamp"] as? Timestamp {
+                        timestamp = firestoreTimestamp.dateValue()
+                    } else if let date = reactionDict["timestamp"] as? Date {
+                        timestamp = date
+                    } else {
+                        // Use current date as fallback
+                        timestamp = Date()
+                    }
+                    
+                    let reaction = MessageReaction(
+                        emoji: emoji,
+                        userId: userId,
+                        timestamp: timestamp,
+                        count: 1
+                    )
+                    
+                    allReactions.append(reaction)
+                }
+                
+                // Store all reactions (must be on main actor)
+                Task { @MainActor [weak self] in
+                    self?.messageReactions[id] = allReactions
+                    print("✅ Stored \(allReactions.count) reactions for message \(id)")
+                }
+            } else {
+                // No reactions array in message data
+                Task { @MainActor [weak self] in
+                    self?.messageReactions[id] = []
+                    print("📊 [Reactions] No reactions array for message \(id)")
+                }
+            }
 
             let message = Message(
                 id: id,
@@ -433,6 +481,91 @@ class ChatViewModel: ObservableObject {
                 )
             } catch {
                 print("❌ Failed to fetch sender for notification: \(error)")
+            }
+        }
+    }
+
+    // MARK: - Send Media Message
+    
+    func sendMediaMessage(mediaItem: MediaItem, text: String? = nil) async {
+        guard let senderId = currentUserId else { return }
+        
+        // Create optimistic message
+        let tempMessage = Message(
+            id: UUID().uuidString,
+            senderId: senderId,
+            text: text,
+            mediaURL: nil, // Will be updated after upload
+            mediaType: mediaItem.type,
+            timestamp: Date(),
+            status: .sending,
+            isPending: true
+        )
+        
+        // Add to UI immediately (optimistic update)
+        messages.append(tempMessage)
+        
+        do {
+            // Upload media to Firebase Storage
+            let mediaURL: String
+            if let image = mediaItem.image {
+                mediaURL = try await uploadImage(image, messageId: tempMessage.id)
+            } else if let url = mediaItem.url {
+                mediaURL = try await uploadMediaFromURL(url, messageId: tempMessage.id)
+            } else {
+                throw MediaUploadError.invalidImageData
+            }
+            
+            // Send message with media to Firebase
+            let messageId = try await firebaseService.sendMessage(
+                conversationId: conversationId,
+                senderId: senderId,
+                text: text,
+                mediaURL: mediaURL,
+                mediaType: mediaItem.type.rawValue
+            )
+            
+            // Update optimistic message with real ID and media URL
+            if let index = messages.firstIndex(where: { $0.id == tempMessage.id }) {
+                messages[index].id = messageId
+                messages[index].mediaURL = mediaURL
+                messages[index].status = .sent
+                messages[index].isPending = false
+            }
+            
+            print("✅ Media message sent successfully: \(messageId)")
+            
+        } catch {
+            print("❌ Failed to send media message: \(error)")
+            
+            // Update optimistic message with error status
+            if let index = messages.firstIndex(where: { $0.id == tempMessage.id }) {
+                messages[index].status = .failed
+                messages[index].isPending = false
+            }
+        }
+    }
+    
+    private func uploadImage(_ image: UIImage, messageId: String) async throws -> String {
+        return try await withCheckedThrowingContinuation { continuation in
+            MediaUploadService.shared.uploadImage(
+                image,
+                conversationId: conversationId,
+                messageId: messageId
+            ) { result in
+                continuation.resume(with: result)
+            }
+        }
+    }
+    
+    private func uploadMediaFromURL(_ url: URL, messageId: String) async throws -> String {
+        return try await withCheckedThrowingContinuation { continuation in
+            MediaUploadService.shared.uploadMediaFromURL(
+                url: url,
+                conversationId: conversationId,
+                messageId: messageId
+            ) { result in
+                continuation.resume(with: result)
             }
         }
     }
@@ -642,15 +775,32 @@ class ChatViewModel: ObservableObject {
     }
     
     private func saveReactionToFirestore(messageId: String, reaction: MessageReaction) async {
-        // TODO: Implement Firestore reaction storage
-        // For now, reactions are stored locally only
-        print("✅ Reaction saved locally: \(reaction.emoji)")
+        do {
+            try await firebaseService.addReaction(
+                conversationId: conversationId,
+                messageId: messageId,
+                emoji: reaction.emoji,
+                userId: reaction.userId
+            )
+            print("✅ Reaction saved to Firestore: \(reaction.emoji) by \(reaction.userId)")
+        } catch {
+            print("❌ Failed to save reaction to Firestore: \(error.localizedDescription)")
+            print("Error details: \(error)")
+        }
     }
     
     private func removeReactionFromFirestore(messageId: String, emoji: String, userId: String) async {
-        // TODO: Implement Firestore reaction removal
-        // For now, reactions are removed locally only
-        print("✅ Reaction removed locally: \(emoji)")
+        do {
+            try await firebaseService.removeReaction(
+                conversationId: conversationId,
+                messageId: messageId,
+                emoji: emoji,
+                userId: userId
+            )
+            print("✅ Reaction removed from Firestore: \(emoji)")
+        } catch {
+            print("❌ Failed to remove reaction from Firestore: \(error)")
+        }
     }
     
     // MARK: - Smart Replies (PR #7)

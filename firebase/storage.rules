@@ -42,7 +42,18 @@ service firebase.storage {
                       fileName.matches('.*\\.jpg$');
     }
     
-    // Message media (images/GIFs)
+    // Message media (images/GIFs) - stored in conversations folder
+    match /conversations/{conversationId}/media/{fileName} {
+      // Only authenticated users can read media
+      allow read: if isAuthenticated();
+      
+      // Only authenticated users can upload media with size/type restrictions
+      allow write: if isAuthenticated() &&
+                      isImage() &&
+                      isValidSize();
+    }
+    
+    // Legacy message media path (keep for backward compatibility)
     match /message_media/{conversationId}/{fileName} {
       // Only authenticated users can read media
       allow read: if isAuthenticated();

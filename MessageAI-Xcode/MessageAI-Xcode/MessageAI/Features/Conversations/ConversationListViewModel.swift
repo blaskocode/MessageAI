@@ -72,8 +72,12 @@ class ConversationListViewModel: ObservableObject {
 
     nonisolated private func endBackgroundTask() {
         if backgroundTask != .invalid {
-            UIApplication.shared.endBackgroundTask(backgroundTask)
-            backgroundTask = .invalid
+            let taskId = backgroundTask
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                UIApplication.shared.endBackgroundTask(taskId)
+                self.backgroundTask = .invalid
+            }
         }
     }
 

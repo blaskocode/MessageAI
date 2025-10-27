@@ -30,35 +30,58 @@ class FirestoreMessageService: ObservableObject {
     func sendMessage(
         conversationId: String,
         senderId: String,
-        text: String
+        text: String? = nil,
+        mediaURL: String? = nil,
+        mediaType: String? = nil
     ) async throws -> String {
         let messageRef = db.collection("conversations")
             .document(conversationId)
             .collection("messages")
             .document()
         
-        let messageData: [String: Any] = [
+        var messageData: [String: Any] = [
             "messageId": messageRef.documentID,
             "senderId": senderId,
-            "text": text,
             "timestamp": FieldValue.serverTimestamp(),
             "status": "sent",
             "deliveredTo": [],
             "readBy": [senderId]
         ]
         
+        // Add text if provided
+        if let text = text, !text.isEmpty {
+            messageData["text"] = text
+        }
+        
+        // Add media if provided
+        if let mediaURL = mediaURL {
+            messageData["mediaURL"] = mediaURL
+        }
+        
+        if let mediaType = mediaType {
+            messageData["mediaType"] = mediaType
+        }
+        
         try await messageRef.setData(messageData)
         
         // Update conversation's lastMessage
+        var lastMessageData: [String: Any] = [
+            "id": messageRef.documentID,
+            "messageId": messageRef.documentID,
+            "senderId": senderId,
+            "timestamp": FieldValue.serverTimestamp(),
+            "readBy": [senderId]
+        ]
+        
+        // Add text or media info to last message
+        if let text = text, !text.isEmpty {
+            lastMessageData["text"] = text
+        } else if let mediaType = mediaType {
+            lastMessageData["text"] = "[\(mediaType.capitalized)]"
+        }
+        
         try await db.collection("conversations").document(conversationId).updateData([
-            "lastMessage": [
-                "id": messageRef.documentID,
-                "messageId": messageRef.documentID,  // Include both for compatibility
-                "text": text,
-                "senderId": senderId,
-                "timestamp": FieldValue.serverTimestamp(),
-                "readBy": [senderId]  // Sender has read their own message
-            ],
+            "lastMessage": lastMessageData,
             "lastUpdated": FieldValue.serverTimestamp()
         ])
         
@@ -135,6 +158,81 @@ class FirestoreMessageService: ObservableObject {
             .collection("messages")
             .document(messageId)
             .updateData(updates)
+    }
+    
+    // MARK: - Reactions
+    
+    func addReaction(
+        conversationId: String,
+        messageId: String,
+        emoji: String,
+        userId: String
+    ) async throws {
+        let messageRef = db.collection("conversations")
+            .document(conversationId)
+            .collection("messages")
+            .document(messageId)
+        
+        // Get current reactions
+        let doc = try await messageRef.getDocument()
+        var reactions = doc.data()?["reactions"] as? [[String: Any]] ?? []
+        
+        // Check if this exact reaction already exists
+        let reactionExists = reactions.contains { reaction in
+            guard let reactionEmoji = reaction["emoji"] as? String,
+                  let reactionUserId = reaction["userId"] as? String else {
+                return false
+            }
+            return reactionEmoji == emoji && reactionUserId == userId
+        }
+        
+        // If reaction doesn't exist, add it
+        if !reactionExists {
+            let reactionData: [String: Any] = [
+                "emoji": emoji,
+                "userId": userId,
+                "timestamp": Date() // Will be converted to Timestamp automatically
+            ]
+            
+            reactions.append(reactionData)
+            
+            try await messageRef.updateData([
+                "reactions": reactions
+            ])
+        }
+    }
+    
+    func removeReaction(
+        conversationId: String,
+        messageId: String,
+        emoji: String,
+        userId: String
+    ) async throws {
+        let messageRef = db.collection("conversations")
+            .document(conversationId)
+            .collection("messages")
+            .document(messageId)
+        
+        // Get current reactions
+        let doc = try await messageRef.getDocument()
+        guard let data = doc.data(),
+              let reactions = data["reactions"] as? [[String: Any]] else {
+            return
+        }
+        
+        // Remove the specific reaction
+        let updatedReactions = reactions.filter { reaction in
+            guard let reactionUserId = reaction["userId"] as? String,
+                  let reactionEmoji = reaction["emoji"] as? String else {
+                return true
+            }
+            return !(reactionUserId == userId && reactionEmoji == emoji)
+        }
+        
+        // Update with filtered reactions
+        try await messageRef.updateData([
+            "reactions": updatedReactions
+        ])
     }
     
     // MARK: - Cleanup

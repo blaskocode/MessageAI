@@ -114,4 +114,22 @@ enum MessageStatus: String, Codable {
 enum MediaType: String, Codable {
     case image
     case gif
+    
+    var displayName: String {
+        switch self {
+        case .image:
+            return "Image"
+        case .gif:
+            return "GIF"
+        }
+    }
+    
+    var iconName: String {
+        switch self {
+        case .image:
+            return "photo"
+        case .gif:
+            return "play.rectangle"
+        }
+    }
 }

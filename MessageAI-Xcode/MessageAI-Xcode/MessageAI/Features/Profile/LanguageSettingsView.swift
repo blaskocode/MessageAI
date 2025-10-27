@@ -12,6 +12,8 @@ struct LanguageSettingsView: View {
     @Binding var culturalHintsEnabled: Bool
     @Environment(\.dismiss) var dismiss
     
+    @EnvironmentObject var viewModel: SettingsViewModel
+    
     // Common languages with their names
     private let availableLanguages: [(code: String, name: String)] = [
         ("en", "English"),
@@ -83,13 +85,26 @@ struct LanguageSettingsView: View {
     }
     
     private func toggleLanguage(_ code: String) {
-        if selectedLanguages.contains(code) {
+        var updatedLanguages = selectedLanguages
+        
+        if updatedLanguages.contains(code) {
             // Don't allow removing if it's the last language
-            if selectedLanguages.count > 1 {
-                selectedLanguages.remove(code)
+            if updatedLanguages.count > 1 {
+                updatedLanguages.remove(code)
+            } else {
+                // Can't remove the last language
+                return
             }
         } else {
-            selectedLanguages.insert(code)
+            updatedLanguages.insert(code)
+        }
+        
+        // Update the binding with the new set
+        selectedLanguages = updatedLanguages
+        
+        // Save language changes to Firestore
+        Task { @MainActor in
+            await viewModel.saveCurrentLanguagesToFirestore()
         }
     }
 }

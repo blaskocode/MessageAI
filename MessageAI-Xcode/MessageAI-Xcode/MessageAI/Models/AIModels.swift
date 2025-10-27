@@ -350,8 +350,31 @@ struct MessageReaction: Codable, Identifiable, Equatable {
     let timestamp: Date
     let count: Int
     
+    init(emoji: String, userId: String, timestamp: Date, count: Int) {
+        self.emoji = emoji
+        self.userId = userId
+        self.timestamp = timestamp
+        self.count = count
+    }
+    
     enum CodingKeys: String, CodingKey {
         case emoji, userId, timestamp, count
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        emoji = try container.decode(String.self, forKey: .emoji)
+        userId = try container.decode(String.self, forKey: .userId)
+        timestamp = try container.decode(Date.self, forKey: .timestamp)
+        count = try container.decode(Int.self, forKey: .count)
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(emoji, forKey: .emoji)
+        try container.encode(userId, forKey: .userId)
+        try container.encode(timestamp, forKey: .timestamp)
+        try container.encode(count, forKey: .count)
     }
     
     static func == (lhs: MessageReaction, rhs: MessageReaction) -> Bool {

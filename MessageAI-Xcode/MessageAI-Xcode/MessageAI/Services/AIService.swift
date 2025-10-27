@@ -126,7 +126,7 @@ class AIService: ObservableObject {
                 data["userFluentLanguage"] = userFluentLanguage
             }
             
-            function.call(data) { result, error in
+            function.call(data) { @Sendable result, error in
                 if let error = error {
                     continuation.resume(throwing: self.mapError(error))
                     return
@@ -395,7 +395,7 @@ class AIService: ObservableObject {
         
         return try await withCheckedThrowingContinuation { continuation in
             let callable = functions.httpsCallable("semanticSearch")
-            callable.call(data) { result, error in
+            callable.call(data) { @Sendable result, error in
                 if let error = error {
                     continuation.resume(throwing: self.mapError(error))
                     return
@@ -438,6 +438,7 @@ class AIService: ObservableObject {
         do {
             let result = try await callable.call(data)
             
+            // Convert to sendable type
             guard let resultData = result.data as? [String: Any],
                   let response = resultData["response"] as? String else {
                 throw AIError.invalidResponse

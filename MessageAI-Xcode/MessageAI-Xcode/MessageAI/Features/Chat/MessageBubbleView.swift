@@ -101,11 +101,22 @@ struct MessageBubble: View {
             }
 
             VStack(alignment: isFromCurrentUser ? .trailing : .leading, spacing: 4) {
+                // Media Content
+                if let mediaURL = message.mediaURL, let mediaType = message.mediaType {
+                    MediaMessageView(
+                        mediaURL: mediaURL,
+                        mediaType: mediaType,
+                        isFromCurrentUser: isFromCurrentUser
+                    )
+                }
+                
+                // Text Content
                 if let text = message.text {
                     VStack(alignment: isFromCurrentUser ? .trailing : .leading, spacing: 8) {
                         // Original message text with enhanced styling
                         VStack(alignment: isFromCurrentUser ? .trailing : .leading, spacing: 8) {
-                            Text(text)
+                            // Use Text with attributed string to make URLs clickable
+                            AttributedText(text: text, textColor: isFromCurrentUser ? .white : .primary)
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 12)
                                 .background(
@@ -123,7 +134,6 @@ struct MessageBubble: View {
                                         }
                                     }
                                 )
-                                .foregroundColor(isFromCurrentUser ? .white : .primary)
                             
                             // Link Previews
                             if let urls = extractURLs(from: text), !urls.isEmpty {
@@ -268,10 +278,9 @@ struct MessageBubble: View {
                     }
                 }
                 
-                // Message Reactions
-                if !isFromCurrentUser {
-                    ReactionView(message: message, viewModel: viewModel)
-                }
+                // Message Reactions - Show for all messages (received messages only by default for add reaction button)
+                // But always show existing reactions
+                ReactionView(message: message, viewModel: viewModel)
 
                 HStack(spacing: 4) {
                     Text(message.timestamp, style: .time)
@@ -409,6 +418,58 @@ struct MessageBubble: View {
         }
         
         return urls.isEmpty ? nil : urls
+    }
+}
+
+// MARK: - AttributedText for Clickable URLs
+
+struct AttributedText: View {
+    let text: String
+    let textColor: Color
+    
+    var body: some View {
+        if let attributedString = createAttributedString(from: text, textColor: textColor) {
+            Text(AttributedString(attributedString))
+        } else {
+            Text(text)
+                .foregroundColor(textColor)
+        }
+    }
+    
+    private func createAttributedString(from text: String, textColor: Color) -> NSAttributedString? {
+        let attributedString = NSMutableAttributedString(string: text)
+        let color = UIColor(textColor)
+        
+        // Set default text color
+        attributedString.addAttribute(.foregroundColor, value: color, range: NSRange(location: 0, length: text.count))
+        
+        // Find URLs and make them clickable
+        let urlPattern = #"(https?://[^\s]+)"#
+        let regex = try? NSRegularExpression(pattern: urlPattern, options: .caseInsensitive)
+        let range = NSRange(location: 0, length: text.utf16.count)
+        
+        let matches = regex?.matches(in: text, options: [], range: range) ?? []
+        
+        for match in matches {
+            if let urlRange = Range(match.range, in: text) {
+                let urlString = String(text[urlRange])
+                if let url = URL(string: urlString) {
+                    attributedString.addAttribute(.link, value: url, range: match.range)
+                    
+                    // Make links underline with appropriate color
+                    if textColor == .white {
+                        // For dark backgrounds (outgoing messages), use white/light color
+                        attributedString.addAttribute(.foregroundColor, value: UIColor.white, range: match.range)
+                    } else {
+                        // For light backgrounds (incoming messages), use blue
+                        attributedString.addAttribute(.foregroundColor, value: UIColor.systemBlue, range: match.range)
+                    }
+                    attributedString.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: match.range)
+                }
+            }
+        }
+        
+        return attributedString.length > 0 ? attributedString : nil
     }
 }
 

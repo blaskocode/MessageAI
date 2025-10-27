@@ -13,6 +13,8 @@ struct ChatView: View {
     @State private var messageText = ""
     @FocusState private var isTextFieldFocused: Bool
     @State private var showingAIAssistant = false
+    @State private var showingMediaPicker = false
+    @State private var selectedMedia: MediaItem? = nil
 
     init(conversationId: String) {
         self.conversationId = conversationId
@@ -158,8 +160,70 @@ struct ChatView: View {
                 .animation(.spring(response: 0.4, dampingFraction: 0.8), value: viewModel.showSmartReplies)
             }
             
+            // Media Preview
+            if let media = selectedMedia {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        // Media Thumbnail
+                        if let image = media.image {
+                            Image(uiImage: image)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 80, height: 80)
+                                .cornerRadius(8)
+                                .clipped()
+                        }
+                        
+                        // Media Info
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(media.type.displayName)
+                                .font(.headline)
+                            Text(media.image != nil ? "Tap to edit caption" : "No preview available")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        Spacer()
+                        
+                        // Remove button
+                        Button(action: { selectedMedia = nil }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.gray)
+                                .font(.title3)
+                        }
+                    }
+                    .padding(12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color(.systemGray6))
+                    )
+                    .padding(.horizontal, 16)
+                }
+                .transition(.asymmetric(
+                    insertion: .move(edge: .bottom).combined(with: .opacity),
+                    removal: .move(edge: .bottom).combined(with: .opacity)
+                ))
+            }
+            
             // Input Bar
             HStack(alignment: .bottom, spacing: 12) {
+                // Media Button
+                Button(action: { showingMediaPicker = true }) {
+                    Image(systemName: "photo")
+                        .font(.system(size: 20))
+                        .foregroundColor(.blue)
+                        .frame(width: 36, height: 36)
+                        .background(
+                            Circle()
+                                .fill(Color(.systemGray6))
+                        )
+                }
+                .accessibilitySupport(
+                    label: "Add media",
+                    hint: "Double tap to add photos or take a picture",
+                    traits: .isButton
+                )
+                
                 TextField("Message", text: $messageText, axis: .vertical)
                     .textFieldStyle(.plain)
                     .focused($isTextFieldFocused)
@@ -182,14 +246,14 @@ struct ChatView: View {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.system(size: 36))
                         .foregroundStyle(
-                            messageText.isEmpty ? 
+                            (messageText.isEmpty && selectedMedia == nil) ? 
                             Color.gray : 
                             Color.messagePrimary
                         )
                 }
-                .disabled(messageText.isEmpty)
-                .scaleEffect(messageText.isEmpty ? 0.9 : 1.0)
-                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: messageText.isEmpty)
+                .disabled(messageText.isEmpty && selectedMedia == nil)
+                .scaleEffect((messageText.isEmpty && selectedMedia == nil) ? 0.9 : 1.0)
+                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: messageText.isEmpty && selectedMedia == nil)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
@@ -261,15 +325,32 @@ struct ChatView: View {
                 AIAssistantView(conversationId: conversationId)
             }
         }
+        .sheet(isPresented: $showingMediaPicker) {
+            MediaPickerView(isPresented: $showingMediaPicker) { mediaItem in
+                selectedMedia = mediaItem
+                showingMediaPicker = false
+            }
+        }
     }
 
     private func sendMessage() {
         let text = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-
-        Task {
-            await viewModel.sendMessage(text: text)
-            messageText = ""
+        
+        // If we have media, send media message
+        if let media = selectedMedia {
+            Task {
+                await viewModel.sendMediaMessage(mediaItem: media, text: text.isEmpty ? nil : text)
+                selectedMedia = nil
+                messageText = ""
+            }
+        } else {
+            // Otherwise, send regular text message
+            guard !text.isEmpty else { return }
+            
+            Task {
+                await viewModel.sendMessage(text: text)
+                messageText = ""
+            }
         }
     }
     
